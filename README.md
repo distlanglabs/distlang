@@ -89,3 +89,11 @@ Build a binary:
 make build
 ./bin/distlang
 ```
+
+Run the POC build command:
+
+```bash
+./bin/distlang build examples/helloworld/index.js
+```
+
+For now, `build` reads the source file and prints its contents.
