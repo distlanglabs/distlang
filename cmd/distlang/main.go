@@ -5,6 +5,7 @@ import (
 	"os"
 
 	"github.com/distlanglabs/distlang/pkg/parser"
+	gojaengine "github.com/distlanglabs/distlang/pkg/runtime/goja"
 )
 
 func usage() {
@@ -18,6 +19,7 @@ func usage() {
 	fmt.Println()
 	fmt.Println("Commands:")
 	fmt.Println("  build <file>   Read a source file and print its contents (POC)")
+	fmt.Println("  run <file>     Execute a JS file with goja (POC)")
 	fmt.Println("  help           Show help for distlang")
 	fmt.Println()
 	fmt.Println("Flags:")
@@ -41,6 +43,28 @@ func runBuild(args []string) int {
 	return 0
 }
 
+func runRun(args []string) int {
+	if len(args) != 1 {
+		fmt.Fprintln(os.Stderr, "run requires exactly one file path")
+		fmt.Fprintln(os.Stderr, "Usage: distlang run <file>")
+		return 1
+	}
+
+	source, err := parser.ParseFile(args[0])
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "run failed: %v\n", err)
+		return 1
+	}
+
+	engine := gojaengine.NewEngine()
+	if err := engine.RunScript(args[0], source); err != nil {
+		fmt.Fprintf(os.Stderr, "run failed: %v\n", err)
+		return 1
+	}
+
+	return 0
+}
+
 func main() {
 	if len(os.Args) == 1 {
 		fmt.Println("distlang - portable distributed app framework (POC)")
@@ -57,6 +81,8 @@ func main() {
 		return
 	case "build":
 		os.Exit(runBuild(args))
+	case "run":
+		os.Exit(runRun(args))
 	default:
 		fmt.Fprintf(os.Stderr, "unknown command: %s\n\n", command)
 		usage()

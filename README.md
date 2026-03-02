@@ -97,3 +97,9 @@ Run the POC build command:
 ```
 
 For now, `build` reads the source file and prints its contents.
+
+Run a simple JS file with goja:
+
+```bash
+./bin/distlang run examples/helloworld/console.js
+```
