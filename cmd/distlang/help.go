@@ -9,8 +9,8 @@ type commandInfo struct {
 }
 
 var commands = []commandInfo{
-	{Name: "build", Description: "Read a source file and print its contents (POC)", Usage: "distlang build <file>"},
-	{Name: "run", Description: "Execute a JS file with goja (POC)", Usage: "distlang run <file>"},
+	{Name: "build", Description: "Compile and print Goja-ready JS (POC)", Usage: "distlang build <file>"},
+	{Name: "run", Description: "Execute JS after compiling to Goja-friendly script", Usage: "distlang run <file>"},
 	{Name: "debug", Description: "Inspect compiler passes for build or run", Usage: "distlang debug <build|run> <file> [--passes=parse,ir,emit]"},
 	{Name: "help", Description: "Show help for distlang", Usage: "distlang help"},
 }
@@ -57,12 +57,12 @@ func fullHelp() {
 }
 
 func commandHelpBuild() {
-	fmt.Println("build - Read a source file and print its contents (POC)")
+	fmt.Println("build - Compile and print Goja-ready JS (POC)")
 	fmt.Println("Usage: distlang build <file>")
 }
 
 func commandHelpRun() {
-	fmt.Println("run - Execute a JS file with goja (POC)")
+	fmt.Println("run - Execute JS after compiling to Goja-friendly script")
 	fmt.Println("Usage: distlang run <file>")
 }
 
@@ -71,7 +71,7 @@ func commandHelpDebug() {
 	fmt.Println("Usage: distlang debug <build|run> <file> [--passes=parse,ir,emit]")
 	fmt.Println("Options:")
 	fmt.Println("  --passes=parse,ir,emit   Comma-separated passes to print (default: ir)")
-	fmt.Println("    parse  - list parsed statements")
+	fmt.Println("    parse  - show transformed Goja-ready JS")
 	fmt.Println("    ir     - print normalized IR (Goja-friendly) as JSON")
-	fmt.Println("    emit   - current source (placeholder until real emitter)")
+	fmt.Println("    emit   - emitted JS (same as parse for now)")
 }

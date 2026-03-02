@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/distlanglabs/distlang/pkg/parser"
+	"github.com/distlanglabs/distlang/pkg/passes"
 )
 
 func runBuild(args []string) int {
@@ -18,12 +18,12 @@ func runBuild(args []string) int {
 		return 1
 	}
 
-	contents, err := parser.ParseFile(filePath)
+	result, err := passes.Execute(filePath, false)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "build failed: %v\n", err)
 		return 1
 	}
 
-	fmt.Print(contents)
+	fmt.Print(result.Emitted)
 	return 0
 }

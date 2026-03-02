@@ -102,18 +102,19 @@ Run the POC build command:
 ./bin/distlang build examples/helloworld/index.js
 ```
 
-For now, `build` reads the source file and prints its contents.
+`build` now runs the compile pipeline and prints the Goja-ready JS output.
 
-Run a simple JS file with goja:
+Run JS (ESM is transformed to Goja-friendly script first):
 
 ```bash
+./bin/distlang run examples/helloworld/index.js
 ./bin/distlang run examples/helloworld/console.js
 ```
 
-Debug compiler passes (parse, ir, emit placeholder):
+Debug compiler passes (parse, ir, emit):
 
 ```bash
-./bin/distlang debug build examples/helloworld/console.js --passes=parse,ir
+./bin/distlang debug build examples/helloworld/index.js --passes=parse,ir,emit
 ./bin/distlang debug run examples/helloworld/console.js --passes=ir,emit
 ./bin/distlang debug --help
 ```

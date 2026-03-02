@@ -1,4 +1,4 @@
-package parser
+package source
 
 import (
 	"os"
@@ -6,7 +6,7 @@ import (
 	"testing"
 )
 
-func TestParseFile(t *testing.T) {
+func TestReadFile(t *testing.T) {
 	tmp := t.TempDir()
 	filePath := filepath.Join(tmp, "index.js")
 	content := "export default { fetch() { return new Response(\"ok\") } }\n"
@@ -15,9 +15,9 @@ func TestParseFile(t *testing.T) {
 		t.Fatalf("write file: %v", err)
 	}
 
-	got, err := ParseFile(filePath)
+	got, err := ReadFile(filePath)
 	if err != nil {
-		t.Fatalf("ParseFile returned error: %v", err)
+		t.Fatalf("ReadFile returned error: %v", err)
 	}
 
 	if got != content {
@@ -25,8 +25,8 @@ func TestParseFile(t *testing.T) {
 	}
 }
 
-func TestParseFileMissing(t *testing.T) {
-	_, err := ParseFile("does-not-exist.js")
+func TestReadFileMissing(t *testing.T) {
+	_, err := ReadFile("does-not-exist.js")
 	if err == nil {
 		t.Fatal("expected error for missing file")
 	}

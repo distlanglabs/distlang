@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/distlanglabs/distlang/pkg/parser"
+	"github.com/distlanglabs/distlang/pkg/passes"
 	"github.com/distlanglabs/distlang/pkg/runtime"
 )
 
@@ -19,14 +19,14 @@ func runRun(args []string) int {
 		return 1
 	}
 
-	source, err := parser.ParseFile(filePath)
+	result, err := passes.Execute(filePath, false)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "run failed: %v\n", err)
 		return 1
 	}
 
 	engine := runtime.NewDefaultEngine()
-	if err := engine.RunScript(filePath, source); err != nil {
+	if err := engine.RunScript(filePath, result.Emitted); err != nil {
 		fmt.Fprintf(os.Stderr, "run failed: %v\n", err)
 		return 1
 	}

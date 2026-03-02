@@ -1,12 +1,12 @@
-package gojaengine
+package ir
 
 import "testing"
 
 func TestBuildIRConsoleLog(t *testing.T) {
 	src := `console.log("Hello from Goja!");`
-	ir, err := BuildIR("console.js", src)
+	ir, err := Build("console.js", src)
 	if err != nil {
-		t.Fatalf("BuildIR error: %v", err)
+		t.Fatalf("Build error: %v", err)
 	}
 
 	if len(ir.Body) != 1 {

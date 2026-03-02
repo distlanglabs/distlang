@@ -1,4 +1,4 @@
-package gojaengine
+package ir
 
 import (
 	"encoding/json"
@@ -34,8 +34,8 @@ type Literal struct {
 	Value interface{} `json:"value"`
 }
 
-// BuildIR parses JavaScript source and returns a simplified IR for debugging.
-func BuildIR(filename, source string) (*IR, error) {
+// Build parses JavaScript source and returns a simplified IR for debugging.
+func Build(filename, source string) (*IR, error) {
 	prog, err := parser.ParseFile(nil, filename, source, 0)
 	if err != nil {
 		return nil, fmt.Errorf("parse: %w", err)
