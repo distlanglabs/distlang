@@ -103,3 +103,9 @@ Run a simple JS file with goja:
 ```bash
 ./bin/distlang run examples/helloworld/console.js
 ```
+
+Print a normalized IR while running:
+
+```bash
+./bin/distlang run --debug-ir examples/helloworld/console.js
+```

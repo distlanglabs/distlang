@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
 
@@ -24,6 +25,7 @@ func usage() {
 	fmt.Println()
 	fmt.Println("Flags:")
 	fmt.Println("  -h, --help     Show help for distlang")
+	fmt.Println("  --debug-ir     With 'run', print normalized IR to stderr")
 }
 
 func runBuild(args []string) int {
@@ -44,20 +46,52 @@ func runBuild(args []string) int {
 }
 
 func runRun(args []string) int {
-	if len(args) != 1 {
-		fmt.Fprintln(os.Stderr, "run requires exactly one file path")
-		fmt.Fprintln(os.Stderr, "Usage: distlang run <file>")
+	debugIR := false
+	filePath := ""
+
+	for _, arg := range args {
+		switch arg {
+		case "--debug-ir":
+			debugIR = true
+		default:
+			if filePath == "" {
+				filePath = arg
+			} else {
+				fmt.Fprintln(os.Stderr, "run accepts at most one file path")
+				fmt.Fprintln(os.Stderr, "Usage: distlang run [--debug-ir] <file>")
+				return 1
+			}
+		}
+	}
+
+	if filePath == "" {
+		fmt.Fprintln(os.Stderr, "run requires a file path")
+		fmt.Fprintln(os.Stderr, "Usage: distlang run [--debug-ir] <file>")
 		return 1
 	}
 
-	source, err := parser.ParseFile(args[0])
+	source, err := parser.ParseFile(filePath)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "run failed: %v\n", err)
 		return 1
 	}
 
+	if debugIR {
+		ir, err := gojaengine.BuildIR(filePath, source)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "debug-ir failed: %v\n", err)
+			return 1
+		}
+		data, err := json.MarshalIndent(ir, "", "  ")
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "debug-ir marshal failed: %v\n", err)
+			return 1
+		}
+		fmt.Fprintln(os.Stderr, string(data))
+	}
+
 	engine := gojaengine.NewEngine()
-	if err := engine.RunScript(args[0], source); err != nil {
+	if err := engine.RunScript(filePath, source); err != nil {
 		fmt.Fprintf(os.Stderr, "run failed: %v\n", err)
 		return 1
 	}
