@@ -70,3 +70,22 @@ distlang should convert this to wasm and run it locally.
 - WinterTC-style `Request`/`Response`
 - Capabilities: `http`, `kv`, `log`
 - Echo route + in-memory KV
+
+## Run locally
+
+```bash
+make run
+```
+
+Show help text:
+
+```bash
+go run ./cmd/distlang -h
+```
+
+Build a binary:
+
+```bash
+make build
+./bin/distlang
+```
