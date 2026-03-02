@@ -104,11 +104,11 @@ Run the POC build command:
 
 `build` now runs the compile pipeline and prints the Goja-ready JS output.
 
-Run JS (ESM is transformed to Goja-friendly script first; worker `fetch` is invoked and response printed):
+Run JS (ESM is transformed to Goja-friendly script; worker `fetch` is served over HTTP):
 
 ```bash
-./bin/distlang run examples/helloworld/index.js
-./bin/distlang run examples/helloworld/console.js
+./bin/distlang run examples/helloworld/index.js --port=5656
+# then open http://127.0.0.1:5656 in your browser or curl
 ```
 
 Debug compiler passes (parse, ir, emit):

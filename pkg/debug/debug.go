@@ -43,10 +43,7 @@ func Run(filePath string, passOrder []string, execute bool) error {
 		engine := runtime.NewDefaultEngine()
 		resp, err := engine.RunWorker(filePath, result.Emitted, runtimetypes.Request{URL: "http://localhost/", Method: "GET", Headers: map[string]string{"host": "localhost"}})
 		if err != nil {
-			if err := engine.RunScript(filePath, result.Emitted); err != nil {
-				return fmt.Errorf("run: %w", err)
-			}
-			return nil
+			return fmt.Errorf("run: %w", err)
 		}
 		fmt.Printf("== run ==\nstatus: %d\n%s\n", resp.Status, resp.Body)
 	}
