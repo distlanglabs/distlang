@@ -83,6 +83,12 @@ Show help text:
 go run ./cmd/distlang -h
 ```
 
+Full help (global + per-command):
+
+```bash
+./bin/distlang --full-help
+```
+
 Build a binary:
 
 ```bash
@@ -104,8 +110,10 @@ Run a simple JS file with goja:
 ./bin/distlang run examples/helloworld/console.js
 ```
 
-Print a normalized IR while running:
+Debug compiler passes (parse, ir, emit placeholder):
 
 ```bash
-./bin/distlang run --debug-ir examples/helloworld/console.js
+./bin/distlang debug build examples/helloworld/console.js --passes=parse,ir
+./bin/distlang debug run examples/helloworld/console.js --passes=ir,emit
+./bin/distlang debug --help
 ```
