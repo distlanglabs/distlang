@@ -6,6 +6,7 @@ import (
 
 	"github.com/distlanglabs/distlang/pkg/passes"
 	"github.com/distlanglabs/distlang/pkg/runtime"
+	runtimetypes "github.com/distlanglabs/distlang/pkg/runtime/types"
 )
 
 // Run executes debug passes and optionally runs the script.
@@ -40,9 +41,14 @@ func Run(filePath string, passOrder []string, execute bool) error {
 
 	if execute {
 		engine := runtime.NewDefaultEngine()
-		if err := engine.RunScript(filePath, result.Emitted); err != nil {
-			return fmt.Errorf("run: %w", err)
+		resp, err := engine.RunWorker(filePath, result.Emitted, runtimetypes.Request{URL: "http://localhost/", Method: "GET", Headers: map[string]string{"host": "localhost"}})
+		if err != nil {
+			if err := engine.RunScript(filePath, result.Emitted); err != nil {
+				return fmt.Errorf("run: %w", err)
+			}
+			return nil
 		}
+		fmt.Printf("== run ==\nstatus: %d\n%s\n", resp.Status, resp.Body)
 	}
 
 	return nil

@@ -104,7 +104,7 @@ Run the POC build command:
 
 `build` now runs the compile pipeline and prints the Goja-ready JS output.
 
-Run JS (ESM is transformed to Goja-friendly script first):
+Run JS (ESM is transformed to Goja-friendly script first; worker `fetch` is invoked and response printed):
 
 ```bash
 ./bin/distlang run examples/helloworld/index.js

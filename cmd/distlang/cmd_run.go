@@ -6,6 +6,7 @@ import (
 
 	"github.com/distlanglabs/distlang/pkg/passes"
 	"github.com/distlanglabs/distlang/pkg/runtime"
+	runtimetypes "github.com/distlanglabs/distlang/pkg/runtime/types"
 )
 
 func runRun(args []string) int {
@@ -26,10 +27,22 @@ func runRun(args []string) int {
 	}
 
 	engine := runtime.NewDefaultEngine()
-	if err := engine.RunScript(filePath, result.Emitted); err != nil {
-		fmt.Fprintf(os.Stderr, "run failed: %v\n", err)
-		return 1
+	resp, err := engine.RunWorker(filePath, result.Emitted, runtimetypes.Request{
+		URL:    "http://localhost/",
+		Method: "GET",
+		Headers: map[string]string{
+			"host": "localhost",
+		},
+	})
+	if err != nil {
+		// Fallback to plain script execution for non-worker scripts.
+		if err := engine.RunScript(filePath, result.Emitted); err != nil {
+			fmt.Fprintf(os.Stderr, "run failed: %v\n", err)
+			return 1
+		}
+		return 0
 	}
 
+	fmt.Printf("status: %d\n%s", resp.Status, resp.Body)
 	return 0
 }
