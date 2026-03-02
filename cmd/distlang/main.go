@@ -1,15 +1,13 @@
 package main
 
 import (
-	"encoding/json"
 	"fmt"
 	"os"
 	"strings"
 
+	"github.com/distlanglabs/distlang/pkg/debug"
 	"github.com/distlanglabs/distlang/pkg/parser"
-	gojaengine "github.com/distlanglabs/distlang/pkg/runtime/goja"
-	"github.com/dop251/goja/ast"
-	goparser "github.com/dop251/goja/parser"
+	"github.com/distlanglabs/distlang/pkg/runtime"
 )
 
 type commandInfo struct {
@@ -105,7 +103,13 @@ func runRun(args []string) int {
 		return 1
 	}
 
-	return executeScript(filePath, source)
+	engine := runtime.NewDefaultEngine()
+	if err := engine.RunScript(filePath, source); err != nil {
+		fmt.Fprintf(os.Stderr, "run failed: %v\n", err)
+		return 1
+	}
+
+	return 0
 }
 
 func commandHelpRun() {
@@ -174,57 +178,8 @@ func commandHelpDebug() {
 }
 
 func debugFile(filePath string, passes []string, execute bool) int {
-	source, err := parser.ParseFile(filePath)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "debug failed to read file: %v\n", err)
-		return 1
-	}
-
-	var parsed *ast.Program
-	for _, pass := range passes {
-		switch pass {
-		case "parse":
-			if parsed == nil {
-				parsed, err = goparser.ParseFile(nil, filePath, source, 0)
-				if err != nil {
-					fmt.Fprintf(os.Stderr, "parse failed: %v\n", err)
-					return 1
-				}
-			}
-			printParsePass(parsed)
-		case "ir":
-			ir, err := gojaengine.BuildIR(filePath, source)
-			if err != nil {
-				fmt.Fprintf(os.Stderr, "ir failed: %v\n", err)
-				return 1
-			}
-			data, err := json.MarshalIndent(ir, "", "  ")
-			if err != nil {
-				fmt.Fprintf(os.Stderr, "ir marshal failed: %v\n", err)
-				return 1
-			}
-			fmt.Println("== ir ==")
-			fmt.Println(string(data))
-		case "emit":
-			fmt.Println("== emit (placeholder) ==")
-			fmt.Print(source)
-		default:
-			fmt.Fprintf(os.Stderr, "unknown pass: %s\n", pass)
-			return 1
-		}
-	}
-
-	if execute {
-		return executeScript(filePath, source)
-	}
-
-	return 0
-}
-
-func executeScript(filePath, source string) int {
-	engine := gojaengine.NewEngine()
-	if err := engine.RunScript(filePath, source); err != nil {
-		fmt.Fprintf(os.Stderr, "run failed: %v\n", err)
+	if err := debug.Run(filePath, passes, execute); err != nil {
+		fmt.Fprintf(os.Stderr, "debug failed: %v\n", err)
 		return 1
 	}
 	return 0
@@ -253,14 +208,6 @@ func parsePasses(flag string) []string {
 		}
 	}
 	return cleaned
-}
-
-func printParsePass(prog *ast.Program) {
-	fmt.Println("== parse ==")
-	fmt.Fprintf(os.Stdout, "statements: %d\n", len(prog.Body))
-	for i, stmt := range prog.Body {
-		fmt.Fprintf(os.Stdout, "[%d] %T\n", i, stmt)
-	}
 }
 
 func main() {
