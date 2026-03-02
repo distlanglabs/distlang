@@ -45,10 +45,14 @@ func usage() {
 func fullHelp() {
 	usage()
 	fmt.Println()
+	fmt.Println("Command Help:")
+	fmt.Println("---")
 	commandHelpBuild()
 	fmt.Println()
+	fmt.Println("---")
 	commandHelpRun()
 	fmt.Println()
+	fmt.Println("---")
 	commandHelpDebug()
 }
 
