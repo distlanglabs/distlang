@@ -1,120 +1,53 @@
 # distlang
 
-# Overview
+## Current Status (Phase 0 POC)
+- Go CLI with a Goja-backed runtime.
+- ESM is transformed to Goja-friendly script via esbuild-based passes.
+- `run` serves a Worker-style `default.fetch` over HTTP (strict worker mode).
+- Commands: `build`, `run`, `debug`.
 
-distlang dev <folder> # compiles, brings up the port locally running the project. 
+## Requirements
+- Go 1.21+
 
-jsProject which understand winterTC -> wasm -> run on a port.
+## Quick Start
+```bash
+# build the CLI
+go build -o ./bin/distlang ./cmd/distlang
 
-## Overview diagram
+# or use make
+make build
 
-```text
-                           +----------------------+
-                           |      distlang CLI    |
-                           |   (Go orchestrator)  |
-                           +----------+-----------+
-                                      |
-          +---------------------------+----------------------------+
-          |                            |                           |
-          v                            v                           v
-+---------------------+     +----------------------+    +----------------------+
-|  Compiler/Planner   |     |   Deploy/Control     |    | Version/Lock Manager |
-|      (Go)           |     |      Plane (Go)      |    |        (Go)          |
-+----------+----------+     +----------+-----------+    +----------+-----------+
-           |                           |                           |
-           | produces                  | consumes                  | tracks
-           v                           v                           v
-                 +-----------------------------------------------+
-                 |         Distlang IR + Capability ABI          |
-                 |     (versioned JSON contract, stable)         |
-                 +-------------------+---------------------------+
-                                     |
-                                     | invokes runtime backends
-                                     v
-     +-------------------+--------------------+--------------------+-------------------+
-     |                   |                    |                    |                   |
-     v                   v                    v                    v                   v
-+-----------+     +-------------+      +-------------+      +-------------+     +-------------+
-| Rust Comp |     | Node Runner |      | workerd Run |      | Deno Runner |     | Future WASI |
-| (Wasm/CM) |     |  (subproc)  |      |  (subproc)  |      |  (subproc)  |     |   backend   |
-+-----+-----+     +------+------+      +------+------+      +------+------+     +------+
-      |                  |                    |                    |                   |
-      +------------------+--------------------+--------------------+-------------------+
-                                     |
-                                     v
-                        +-------------------------------+
-                        | Vendor Adapters / Providers   |
-                        | Cloudflare | AWS | Azure | Local |
-                        +-------------------------------+
+# run a worker locally (default port 5656)
+./bin/distlang run examples/helloworld/index.js --port=5656
+# then open http://127.0.0.1:5656
+
+# inspect compiler passes
+./bin/distlang debug build examples/helloworld/index.js --passes=parse,ir,emit
 ```
 
-# This is Cloudflare worker code. 
+## Commands
+- `build <file>`: compile the file through passes and print the Goja-ready JS.
+- `run <file> [--port=N]`: start an HTTP server, load the worker, and route requests to `default.fetch` (strict worker mode; fails if `fetch` is missing).
+- `debug <build|run> <file> [--passes=...]`: print pass outputs (`parse`, `ir`, `emit`); with `run`, also execute `fetch` once.
 
-```
+## Example Worker
+```js
 export default {
   async fetch(request, env, ctx) {
     return new Response("Hello Worker!");
   },
 };
 ```
-
-distlang should convert this to wasm and run it locally. 
-
-
-
-# POC
-
-## Phase 0: Local POC
-
-- Node-based local runtime
-- WinterTC-style `Request`/`Response`
-- Capabilities: `http`, `kv`, `log`
-- Echo route + in-memory KV
-
-## Run locally
-
-```bash
-make run
-```
-
-Show help text:
-
-```bash
-go run ./cmd/distlang -h
-```
-
-Full help (global + per-command):
-
-```bash
-./bin/distlang --full-help
-```
-
-Build a binary:
-
-```bash
-make build
-./bin/distlang
-```
-
-Run the POC build command:
-
-```bash
-./bin/distlang build examples/helloworld/index.js
-```
-
-`build` now runs the compile pipeline and prints the Goja-ready JS output.
-
-Run JS (ESM is transformed to Goja-friendly script; worker `fetch` is served over HTTP):
-
+Run it:
 ```bash
 ./bin/distlang run examples/helloworld/index.js --port=5656
-# then open http://127.0.0.1:5656 in your browser or curl
 ```
 
-Debug compiler passes (parse, ir, emit):
+## Known Limitations
+- Minimal Web API shims (Request/Response/Headers are very limited).
+- No hot reload; worker is loaded once at startup.
+- Only Goja runtime backend; no WASM or other runtimes yet.
+- Strict worker mode only; plain scripts are not executed by `run`.
 
-```bash
-./bin/distlang debug build examples/helloworld/index.js --passes=parse,ir,emit
-./bin/distlang debug run examples/helloworld/console.js --passes=ir,emit
-./bin/distlang debug --help
-```
+## Roadmap
+See [ROADMAP.md](ROADMAP.md) for vision, architecture, and upcoming phases.
