@@ -71,4 +71,7 @@ func commandHelpDebug() {
 	fmt.Println("Usage: distlang debug <build|run> <file> [--passes=parse,ir,emit]")
 	fmt.Println("Options:")
 	fmt.Println("  --passes=parse,ir,emit   Comma-separated passes to print (default: ir)")
+	fmt.Println("    parse  - list parsed statements")
+	fmt.Println("    ir     - print normalized IR (Goja-friendly) as JSON")
+	fmt.Println("    emit   - current source (placeholder until real emitter)")
 }
