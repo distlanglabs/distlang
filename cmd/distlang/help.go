@@ -9,7 +9,7 @@ type commandInfo struct {
 }
 
 var commands = []commandInfo{
-	{Name: "build", Description: "Compile and print Goja-ready JS (POC)", Usage: "distlang build <file>"},
+	{Name: "build", Description: "Build platform artifacts (goja, cloudflare)", Usage: "distlang build <file>"},
 	{Name: "run", Description: "Serve worker fetch via Goja", Usage: "distlang run <file> [--port=N]"},
 	{Name: "debug", Description: "Inspect compiler passes for build or run", Usage: "distlang debug <build|run> <file> [--passes=parse,ir,emit]"},
 	{Name: "help", Description: "Show help for distlang", Usage: "distlang help"},
@@ -57,7 +57,7 @@ func fullHelp() {
 }
 
 func commandHelpBuild() {
-	fmt.Println("build - Compile and print Goja-ready JS (POC)")
+	fmt.Println("build - Build platform artifacts (goja, cloudflare)")
 	fmt.Println("Usage: distlang build <file>")
 }
 

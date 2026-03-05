@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/distlanglabs/distlang/pkg/passes"
+	parsepass "github.com/distlanglabs/distlang/pkg/passes/parse"
 	"github.com/distlanglabs/distlang/pkg/runtime"
 	runtimetypes "github.com/distlanglabs/distlang/pkg/runtime/types"
 )
@@ -52,7 +53,7 @@ func runRun(args []string) int {
 		return 1
 	}
 
-	result, err := passes.Execute(filePath, false)
+	result, err := passes.Execute(filePath, passes.Options{Format: parsepass.FormatGoja})
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "run failed: %v\n", err)
 		return 1

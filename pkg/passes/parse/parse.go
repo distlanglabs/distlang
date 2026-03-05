@@ -6,16 +6,34 @@ import (
 	"github.com/evanw/esbuild/pkg/api"
 )
 
-// ToScript transforms module-oriented JS into Goja-friendly script code.
-func ToScript(filename, source string) (string, error) {
-	result := api.Transform(source, api.TransformOptions{
+// Format controls how source is transformed.
+type Format string
+
+const (
+	FormatGoja       Format = "goja"
+	FormatCloudflare        = "cloudflare"
+)
+
+// ToScript transforms module-oriented JS into the requested format.
+func ToScript(filename, source string, format Format) (string, error) {
+	opts := api.TransformOptions{
 		Loader:      api.LoaderJS,
 		Sourcefile:  filename,
-		Format:      api.FormatIIFE,
-		GlobalName:  "distlangWorker",
 		Target:      api.ESNext,
 		TreeShaking: api.TreeShakingFalse,
-	})
+	}
+
+	switch format {
+	case FormatGoja:
+		opts.Format = api.FormatIIFE
+		opts.GlobalName = "distlangWorker"
+	case FormatCloudflare:
+		opts.Format = api.FormatESModule
+	default:
+		return "", fmt.Errorf("unknown format: %s", format)
+	}
+
+	result := api.Transform(source, opts)
 
 	if len(result.Errors) > 0 {
 		return "", fmt.Errorf("transform: %s", result.Errors[0].Text)

@@ -3,45 +3,41 @@
 ## Vision
 Distlang is a capability-based framework for building portable serverless apps. The goal is a stable Distlang IR + Capability ABI that can target multiple backends (Goja/Node, workerd, Deno, WASI, future providers) with a consistent deploy/control plane and lock/version manager.
 
-## Architecture (future-facing)
+## Architecture (current POC + future-facing)
 ```
-                           +----------------------+
-                           |      distlang CLI    |
-                           |   (Go orchestrator)  |
-                           +----------+-----------+
-                                      |
-          +---------------------------+----------------------------+
-          |                            |                           |
-          v                            v                           v
-+---------------------+     +----------------------+    +----------------------+
-|  Compiler/Planner   |     |   Deploy/Control     |    | Version/Lock Manager |
-|      (Go)           |     |      Plane (Go)      |    |        (Go)          |
-+----------+----------+     +----------+-----------+    +----------+-----------+
-           |                           |                           |
-           | produces                  | consumes                  | tracks
-           v                           v                           v
-                 +-----------------------------------------------+
-                 |         Distlang IR + Capability ABI          |
-                 |     (versioned JSON contract, stable)         |
-                 +-------------------+---------------------------+
-                                     |
-                                     | invokes runtime backends
-                                     v
-     +-------------------+--------------------+--------------------+-------------------+
-     |                   |                    |                    |                   |
-     v                   v                    v                    v                   v
-+-----------+     +-------------+      +-------------+      +-------------+     +-------------+
-| Rust Comp |     | Node Runner |      | workerd Run |      | Deno Runner |     | Future WASI |
-| (Wasm/CM) |     |  (subproc)  |      |  (subproc)  |      |  (subproc)  |     |   backend   |
-+-----+-----+     +------+------+      +------+------+      +------+------+     +------+
-      |                  |                    |                    |                   |
-      +------------------+--------------------+--------------------+-------------------+
-                                     |
-                                     v
-                        +-------------------------------+
-                        | Vendor Adapters / Providers   |
-                        | Cloudflare | AWS | Azure | Local |
-                        +-------------------------------+
+                            +----------------------+
+                            |      distlang CLI    |
+                            |   (Go orchestrator)  |
+                            +----------+-----------+
+                                       |
+                     +-----------------+-----------------+
+                     |                                   |
+                     v                                   v
+           +---------------------+               +----------------------+
+           |  Compiler/Planner   |               |  Platform Integrator |
+           |      (Go)           |               |      (Go, future)    |
+           +----------+----------+               +----------+-----------+
+                      |                                  |
+                      | produces                          | renders
+                      v                                  v
+             +----------------------------+   +-------------------------------+
+             | Distlang IR + Capability   |   | Platform artifacts / configs  |
+             | ABI (future-stable)        |   | (dist/*)                      |
+             +-------------+--------------+   +-------------------------------+
+                           |                              |
+                           | invokes runtime formats       | today: goja, cloudflare
+                           v                              v
+         +--------------------+--------------------+--------------------+
+         |                    |                    |                    |
+         v                    v                    v                    v
+   +-----------+       +-------------+       +-------------+      +-------------+
+   | goja VM   |       | workerd     |       | Node runner |      | Deno runner |
+   | (current) |       | (future)    |       | (future)    |      | (future)    |
+   +-----------+       +-------------+       +-------------+      +-------------+
+
+Current platform artifacts
+  - goja: dist/goja/worker.js
+  - cloudflare: dist/cloudflare/worker.js, wrangler.toml, Makefile
 ```
 
 ## Milestones

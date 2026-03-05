@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/distlanglabs/distlang/pkg/passes"
+	parsepass "github.com/distlanglabs/distlang/pkg/passes/parse"
 	"github.com/distlanglabs/distlang/pkg/runtime"
 	runtimetypes "github.com/distlanglabs/distlang/pkg/runtime/types"
 )
@@ -14,7 +15,7 @@ import (
 func Run(filePath string, passOrder []string, execute bool) error {
 	needIR := contains(passOrder, "ir")
 
-	result, err := passes.Execute(filePath, needIR)
+	result, err := passes.Execute(filePath, passes.Options{Format: parsepass.FormatGoja, NeedIR: needIR})
 	if err != nil {
 		return err
 	}

@@ -17,9 +17,14 @@ type Result struct {
 	Emitted     string
 }
 
-// Execute runs the compile pipeline and returns outputs. If needIR is true, the
-// IR stage is also executed.
-func Execute(filePath string, needIR bool) (Result, error) {
+// Options controls pipeline execution.
+type Options struct {
+	Format parsepass.Format
+	NeedIR bool
+}
+
+// Execute runs the compile pipeline and returns outputs.
+func Execute(filePath string, opts Options) (Result, error) {
 	var res Result
 
 	src, err := source.ReadFile(filePath)
@@ -28,13 +33,13 @@ func Execute(filePath string, needIR bool) (Result, error) {
 	}
 	res.Source = src
 
-	transformed, err := parsepass.ToScript(filePath, src)
+	transformed, err := parsepass.ToScript(filePath, src, opts.Format)
 	if err != nil {
 		return res, fmt.Errorf("parse: %w", err)
 	}
 	res.Transformed = transformed
 
-	if needIR {
+	if opts.NeedIR {
 		built, err := ir.Build(filePath, transformed)
 		if err != nil {
 			return res, fmt.Errorf("ir: %w", err)

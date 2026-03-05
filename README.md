@@ -26,7 +26,7 @@ make build
 ```
 
 ## Commands
-- `build <file>`: compile the file through passes and print the Goja-ready JS.
+- `build <file>`: build platform artifacts (goja + cloudflare) into `dist/` and print a summary.
 - `run <file> [--port=N]`: start an HTTP server, load the worker, and route requests to `default.fetch` (strict worker mode; fails if `fetch` is missing).
 - `debug <build|run> <file> [--passes=...]`: print pass outputs (`parse`, `ir`, `emit`); with `run`, also execute `fetch` once.
 
@@ -38,9 +38,19 @@ export default {
   },
 };
 ```
-Run it:
+Run it locally (goja platform):
 ```bash
 ./bin/distlang run examples/helloworld/index.js --port=5656
+```
+
+Build artifacts (goja + cloudflare):
+```bash
+./bin/distlang build examples/helloworld/index.js
+# outputs summary and writes dist/
+
+# Cloudflare Makefile helpers
+make -C dist/cloudflare run      # wrangler dev
+make -C dist/cloudflare publish  # wrangler deploy
 ```
 
 ## Known Limitations
