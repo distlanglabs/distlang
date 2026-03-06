@@ -27,6 +27,12 @@ go.work.sum
 
 # env file
 .env
+examples/**/dist/
+examples/**/.env
+examples/**/.env.*
+examples/**/targets/**/*.env
+!examples/**/.env.example
+!examples/**/targets/**/*.env.example
 
 # Editor/IDE
 # .idea/

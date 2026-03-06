@@ -10,6 +10,8 @@ type commandInfo struct {
 
 var commands = []commandInfo{
 	{Name: "build", Description: "Build platform artifacts (goja, cloudflare)", Usage: "distlang build <file>"},
+	{Name: "target", Description: "Manage target setup scaffolding", Usage: "distlang target <subcommand>"},
+	{Name: "deploy", Description: "Deploy worker to a target platform", Usage: "distlang deploy <file> [--target=cloudflare]"},
 	{Name: "run", Description: "Serve worker fetch via Goja", Usage: "distlang run <file> [--port=N]"},
 	{Name: "debug", Description: "Inspect compiler passes for build or run", Usage: "distlang debug <build|run> <file> [--passes=parse,ir,emit]"},
 	{Name: "help", Description: "Show help for distlang", Usage: "distlang help"},
@@ -50,6 +52,12 @@ func fullHelp() {
 	commandHelpBuild()
 	fmt.Println()
 	fmt.Println("---")
+	commandHelpTarget()
+	fmt.Println()
+	fmt.Println("---")
+	commandHelpDeploy()
+	fmt.Println()
+	fmt.Println("---")
 	commandHelpRun()
 	fmt.Println()
 	fmt.Println("---")
@@ -59,6 +67,29 @@ func fullHelp() {
 func commandHelpBuild() {
 	fmt.Println("build - Build platform artifacts (goja, cloudflare)")
 	fmt.Println("Usage: distlang build <file>")
+}
+
+func commandHelpDeploy() {
+	fmt.Println("deploy - Deploy worker to a target platform")
+	fmt.Println("Usage: distlang deploy <file> [--target=cloudflare]")
+	fmt.Println("Options:")
+	fmt.Println("  --target=cloudflare   Deploy target platform (default: cloudflare)")
+	fmt.Println("Cloudflare credentials are loaded from shell env or <worker-dir>/targets/cloudflare/cloudflare.env")
+}
+
+func commandHelpTarget() {
+	fmt.Println("target - Manage target setup scaffolding")
+	fmt.Println("Usage: distlang target <subcommand>")
+	fmt.Println("Subcommands:")
+	fmt.Println("  init   Create target scaffolding for a project directory")
+}
+
+func commandHelpTargetInit() {
+	fmt.Println("target init - Create target scaffolding")
+	fmt.Println("Usage: distlang target init [--target=cloudflare[,cloudflare...]] [--path=.]")
+	fmt.Println("Options:")
+	fmt.Println("  --target=...   Comma-separated targets to initialize (default: cloudflare)")
+	fmt.Println("  --path=...     Project directory where targets/ will be created (default: current directory)")
 }
 
 func commandHelpRun() {

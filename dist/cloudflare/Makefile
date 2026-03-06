@@ -11,6 +11,7 @@ check-tools: deps
 	@command -v wrangler >/dev/null 2>&1 || (echo "wrangler not installed" && exit 1)
 
 build: check-tools
+	# wrangler deploy --dry-run bundles/validates only (no publish)
 	wrangler deploy --dry-run
 
 run: check-tools

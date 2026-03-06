@@ -34,6 +34,12 @@ func main() {
 		switch args[0] {
 		case "build":
 			commandHelpBuild()
+		case "target":
+			commandHelpTarget()
+		case "target-init", "targetinit":
+			commandHelpTargetInit()
+		case "deploy":
+			commandHelpDeploy()
 		case "run":
 			commandHelpRun()
 		case "debug":
@@ -50,6 +56,10 @@ func main() {
 	switch command {
 	case "build":
 		os.Exit(runBuild(args))
+	case "target":
+		os.Exit(runTarget(args))
+	case "deploy":
+		os.Exit(runDeploy(args))
 	case "run":
 		os.Exit(runRun(args))
 	case "debug":

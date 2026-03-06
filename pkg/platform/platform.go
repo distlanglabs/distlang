@@ -42,6 +42,11 @@ func BuildAll(filePath string) ([]Result, map[Platform]error) {
 	return results, errs
 }
 
+// Build builds artifacts for a single platform.
+func Build(filePath string, p Platform) (Result, error) {
+	return buildPlatform(p, filePath)
+}
+
 func buildPlatform(p Platform, filePath string) (Result, error) {
 	switch p {
 	case Goja:
