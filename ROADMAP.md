@@ -1,7 +1,7 @@
 # Roadmap
 
 ## Vision
-Distlang is a capability-based framework for building portable serverless apps. The goal is a stable Distlang IR + Capability ABI that can target multiple backends (Goja/Node, workerd, Deno, WASI, future providers) with a consistent deploy/control plane and lock/version manager.
+Distlang is a capability-based framework for building portable serverless apps. The goal is a stable Distlang IR + Capability ABI that can target execution backends (V8 isolates, Wasm hosts, future container paths) with provider packaging layered on top.
 
 ## Architecture (current POC + future-facing)
 ```
@@ -25,27 +25,28 @@ Distlang is a capability-based framework for building portable serverless apps. 
              | ABI (future-stable)        |   | (dist/*)                      |
              +-------------+--------------+   +-------------------------------+
                            |                              |
-                           | invokes runtime formats       | today: goja, cloudflare
+                           | invokes backend formats       | today: v8, wasm, cloudflare package
                            v                              v
          +--------------------+--------------------+--------------------+
          |                    |                    |                    |
          v                    v                    v                    v
    +-----------+       +-------------+       +-------------+      +-------------+
-   | goja VM   |       | workerd     |       | Node runner |      | Deno runner |
-   | (current) |       | (future)    |       | (future)    |      | (future)    |
+   | workerd   |       | wasmtime    |       | Node runner |      | Deno runner |
+   | (local)   |       | (local)     |       | (future)    |      | (future)    |
    +-----------+       +-------------+       +-------------+      +-------------+
 
 Current platform artifacts
-  - goja: dist/goja/worker.js
+  - v8: dist/v8/worker.js
+  - wasm: dist/wasm/*
   - cloudflare: dist/cloudflare/worker.js, wrangler.toml, Makefile
 ```
 
 ## Milestones
 
 ### Phase 0 (POC) — current
-- Go CLI with Goja runtime.
-- ESM→Goja transform (esbuild) and passes (`parse`, `ir`, `emit`).
-- `run` serves Worker `default.fetch` over HTTP (strict worker mode).
+- Go CLI with backend builds for V8 and Wasm.
+- ESM transform (esbuild) and passes (`parse`, `ir`, `emit`).
+- `run` launches local workerd and wasmtime entrypoints.
 
 ### Phase 1 — runtime ergonomics
 - Expand Web API shims (Request/Response/Headers, waitUntil queue, streaming bodies).
@@ -58,9 +59,9 @@ Current platform artifacts
 - Test matrix hardening and fixtures for Worker semantics.
 
 ### Phase 3 — multi-backend
-- Add secondary runtime backend (e.g., Node subprocess or workerd) behind the same ABI.
+- Mature the V8 and Wasm backends into runnable parity.
 - Introduce deploy/control plane hooks and provider adapters.
-- Begin WASM path exploration.
+- Expand provider packaging beyond Cloudflare.
 
 ## Non-goals (now)
 - Production-grade deploy plane and vendor adapters.

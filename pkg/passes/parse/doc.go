@@ -1,3 +1,3 @@
-// Package parse transforms module-oriented JavaScript into runtime-ready code.
-// It uses esbuild and supports different output formats like goja and cloudflare.
+// Package parse transforms module-oriented JavaScript into backend-ready code.
+// It uses esbuild and supports backend formats such as v8 and wasm.
 package parse

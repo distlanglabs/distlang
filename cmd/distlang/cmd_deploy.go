@@ -11,7 +11,8 @@ import (
 	"strings"
 
 	"github.com/distlanglabs/distlang/pkg/artifacts"
-	"github.com/distlanglabs/distlang/pkg/platform"
+	"github.com/distlanglabs/distlang/pkg/backend"
+	cloudflareprovider "github.com/distlanglabs/distlang/pkg/provider/cloudflare"
 )
 
 func runDeploy(args []string) int {
@@ -80,13 +81,19 @@ func runDeploy(args []string) int {
 		return 1
 	}
 
-	res, err := platform.Build(absFilePath, platform.Cloudflare)
+	v8Out, err := backend.BuildV8(absFilePath)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "deploy failed: build cloudflare artifacts: %v\n", err)
+		fmt.Fprintf(os.Stderr, "deploy failed: build v8 backend: %v\n", err)
 		return 1
 	}
 
-	if err := artifacts.WriteAll(res.Artifacts); err != nil {
+	res, err := cloudflareprovider.Package(v8Out, cloudflareprovider.Context{ProjectName: fileBase(absFilePath)})
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "deploy failed: package cloudflare artifacts: %v\n", err)
+		return 1
+	}
+
+	if err := artifacts.WriteAll(res); err != nil {
 		fmt.Fprintf(os.Stderr, "deploy failed: write artifacts: %v\n", err)
 		return 1
 	}

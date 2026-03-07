@@ -5,10 +5,10 @@ import (
 	"testing"
 )
 
-func TestToScriptConvertsExportDefault(t *testing.T) {
+func TestToScriptKeepsESMForV8(t *testing.T) {
 	src := `export default { async fetch(request) { return new Response("ok") } }`
 
-	out, err := ToScript("index.js", src, FormatGoja)
+	out, err := ToScript("index.js", src, FormatV8)
 	if err != nil {
 		t.Fatalf("ToScript error: %v", err)
 	}
@@ -17,27 +17,27 @@ func TestToScriptConvertsExportDefault(t *testing.T) {
 		t.Fatalf("expected output code")
 	}
 
-	if strings.Contains(out, "export default") {
-		t.Fatalf("expected transformed code without ESM export, got %s", out)
+	if !strings.Contains(out, "export") {
+		t.Fatalf("expected ESM export to remain for v8, got %s", out)
 	}
 
-	if !strings.Contains(out, "distlangWorker") {
-		t.Fatalf("expected global name distlangWorker in output, got %s", out)
+	if strings.Contains(out, "distlangWorker") {
+		t.Fatalf("unexpected global shim in v8 output: %s", out)
 	}
 }
 
-func TestToScriptKeepsESMForCloudflare(t *testing.T) {
+func TestToScriptKeepsESMForWasmWorkspace(t *testing.T) {
 	src := `export default { async fetch(request) { return new Response("ok") } }`
 
-	out, err := ToScript("index.js", src, FormatCloudflare)
+	out, err := ToScript("index.js", src, FormatWasm)
 	if err != nil {
 		t.Fatalf("ToScript error: %v", err)
 	}
 
 	if !strings.Contains(out, "export") {
-		t.Fatalf("expected ESM export to remain for cloudflare, got %s", out)
+		t.Fatalf("expected ESM export to remain for wasm workspace, got %s", out)
 	}
 	if strings.Contains(out, "distlangWorker") {
-		t.Fatalf("unexpected goja global in cloudflare output: %s", out)
+		t.Fatalf("unexpected global shim in wasm output: %s", out)
 	}
 }

@@ -1,17 +1,18 @@
 package main
 
 import (
+	"context"
 	"fmt"
-	"io"
-	"net/http"
 	"os"
+	"os/exec"
+	"path/filepath"
 	"strconv"
 	"strings"
 
-	"github.com/distlanglabs/distlang/pkg/passes"
-	parsepass "github.com/distlanglabs/distlang/pkg/passes/parse"
-	"github.com/distlanglabs/distlang/pkg/runtime"
-	runtimetypes "github.com/distlanglabs/distlang/pkg/runtime/types"
+	"github.com/distlanglabs/distlang/pkg/artifacts"
+	"github.com/distlanglabs/distlang/pkg/backend"
+	wasmrt "github.com/distlanglabs/distlang/pkg/runtime/wasmtime"
+	v8rt "github.com/distlanglabs/distlang/pkg/runtime/workerd"
 )
 
 func runRun(args []string) int {
@@ -20,29 +21,34 @@ func runRun(args []string) int {
 		return 0
 	}
 
-	port := 5656
+	v8Port := 5656
+	wasmPort := 5757
 	filePath := ""
 
 	for _, arg := range args {
-		if strings.HasPrefix(arg, "--port=") {
-			val := strings.TrimPrefix(arg, "--port=")
-			p, err := strconv.Atoi(val)
-			if err != nil || p <= 0 || p > 65535 {
-				fmt.Fprintf(os.Stderr, "invalid port: %s\n", val)
+		switch {
+		case strings.HasPrefix(arg, "--v8-port="):
+			val := strings.TrimPrefix(arg, "--v8-port=")
+			port, err := parsePort(val)
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "invalid v8 port: %s\n", val)
 				return 1
 			}
-			port = p
-			continue
-		}
-
-		if strings.HasPrefix(arg, "-") {
+			v8Port = port
+		case strings.HasPrefix(arg, "--wasm-port="):
+			val := strings.TrimPrefix(arg, "--wasm-port=")
+			port, err := parsePort(val)
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "invalid wasm port: %s\n", val)
+				return 1
+			}
+			wasmPort = port
+		case strings.HasPrefix(arg, "-"):
 			fmt.Fprintf(os.Stderr, "unknown flag: %s\n", arg)
 			return 1
-		}
-
-		if filePath == "" {
+		case filePath == "":
 			filePath = arg
-		} else {
+		default:
 			fmt.Fprintln(os.Stderr, "run accepts only one file path")
 			return 1
 		}
@@ -53,52 +59,71 @@ func runRun(args []string) int {
 		return 1
 	}
 
-	result, err := passes.Execute(filePath, passes.Options{Format: parsepass.FormatGoja})
+	v8Out, err := backend.BuildV8(filePath)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "run failed: build v8 backend: %v\n", err)
+		return 1
+	}
+	if err := artifacts.WriteAll(v8Out.Artifacts); err != nil {
+		fmt.Fprintf(os.Stderr, "run failed: write v8 artifacts: %v\n", err)
+		return 1
+	}
+
+	wasmOut, err := backend.BuildWasm(filePath)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "run failed: build wasm backend: %v\n", err)
+		return 1
+	}
+	if err := artifacts.WriteAll(wasmOut.Artifacts); err != nil {
+		fmt.Fprintf(os.Stderr, "run failed: write wasm artifacts: %v\n", err)
+		return 1
+	}
+
+	if _, err := exec.LookPath("workerd"); err != nil {
+		fmt.Fprintln(os.Stderr, "run failed: workerd not found in PATH")
+		return 1
+	}
+	if _, err := exec.LookPath("wasmtime"); err != nil {
+		fmt.Fprintln(os.Stderr, "run failed: wasmtime not found in PATH")
+		return 1
+	}
+	if filepath.Ext(wasmOut.EntryPath) != ".wasm" {
+		fmt.Fprintf(os.Stderr, "run failed: wasm backend is not runnable yet; expected a .wasm artifact, got %s\n", wasmOut.EntryPath)
+		return 1
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	errs := make(chan error, 2)
+	v8Runner := v8rt.New()
+	wasmRunner := wasmrt.New()
+
+	go func() {
+		errs <- fmt.Errorf("v8 runtime: %w", v8Runner.Start(ctx, v8Out.EntryPath, v8Port))
+	}()
+	go func() {
+		errs <- fmt.Errorf("wasm runtime: %w", wasmRunner.Start(ctx, wasmOut.EntryPath, wasmPort))
+	}()
+
+	fmt.Printf("Starting local runtimes for %s\n", filePath)
+	fmt.Printf("- v8:   http://127.0.0.1:%d\n", v8Port)
+	fmt.Printf("- wasm: http://127.0.0.1:%d\n", wasmPort)
+
+	err = <-errs
+	cancel()
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "run failed: %v\n", err)
 		return 1
 	}
 
-	engine := runtime.NewDefaultEngine()
-	addr := fmt.Sprintf("127.0.0.1:%d", port)
-
-	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		body, _ := io.ReadAll(r.Body)
-		_ = r.Body.Close()
-
-		headers := map[string]string{}
-		for k, v := range r.Header {
-			if len(v) > 0 {
-				headers[k] = v[0]
-			}
-		}
-
-		resp, err := engine.RunWorker(filePath, result.Emitted, runtimetypes.Request{
-			URL:     r.URL.String(),
-			Method:  r.Method,
-			Headers: headers,
-			Body:    string(body),
-		})
-		if err != nil {
-			http.Error(w, fmt.Sprintf("worker error: %v", err), http.StatusInternalServerError)
-			return
-		}
-
-		for k, v := range resp.Headers {
-			w.Header().Set(k, v)
-		}
-		if resp.Status == 0 {
-			resp.Status = http.StatusOK
-		}
-		w.WriteHeader(resp.Status)
-		_, _ = w.Write([]byte(resp.Body))
-	})
-
-	fmt.Printf("Serving worker %s at http://%s\n", filePath, addr)
-	if err := http.ListenAndServe(addr, handler); err != nil {
-		fmt.Fprintf(os.Stderr, "run failed: %v\n", err)
-		return 1
-	}
-
 	return 0
+}
+
+func parsePort(val string) (int, error) {
+	port, err := strconv.Atoi(val)
+	if err != nil || port <= 0 || port > 65535 {
+		return 0, fmt.Errorf("invalid port")
+	}
+	return port, nil
 }

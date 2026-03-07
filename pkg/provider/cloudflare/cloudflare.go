@@ -5,6 +5,7 @@ import (
 	"text/template"
 
 	"github.com/distlanglabs/distlang/pkg/artifacts"
+	v8backend "github.com/distlanglabs/distlang/pkg/backend/v8"
 )
 
 // Context supplies template data for Cloudflare artifacts.
@@ -12,8 +13,8 @@ type Context struct {
 	ProjectName string
 }
 
-// Render returns artifacts for the Cloudflare platform.
-func Render(workerJS string, ctx Context) ([]artifacts.Artifact, error) {
+// Package renders Cloudflare provider artifacts from V8 backend output.
+func Package(out v8backend.Output, ctx Context) ([]artifacts.Artifact, error) {
 	wrangler, err := renderTemplate(wranglerTomlTmpl, ctx)
 	if err != nil {
 		return nil, err
@@ -25,7 +26,7 @@ func Render(workerJS string, ctx Context) ([]artifacts.Artifact, error) {
 	}
 
 	items := []artifacts.Artifact{
-		{Path: "dist/cloudflare/worker.js", Content: []byte(workerJS)},
+		{Path: "dist/cloudflare/worker.js", Content: []byte(out.Emitted)},
 		{Path: "dist/cloudflare/wrangler.toml", Content: []byte(wrangler)},
 		{Path: "dist/cloudflare/Makefile", Content: []byte(makefile)},
 	}

@@ -1,32 +1,36 @@
 package cloudflare
 
-import "testing"
+import (
+	"testing"
 
-func TestRenderProducesArtifacts(t *testing.T) {
-	artifacts, err := Render("console.log('hi')", Context{ProjectName: "example"})
+	v8backend "github.com/distlanglabs/distlang/pkg/backend/v8"
+)
+
+func TestPackageProducesArtifacts(t *testing.T) {
+	artifacts, err := Package(v8backend.Output{Emitted: "console.log('hi')"}, Context{ProjectName: "example"})
 	if err != nil {
-		t.Fatalf("Render error: %v", err)
+		fatalf(t, "Package error: %v", err)
 	}
 
 	if len(artifacts) != 3 {
-		t.Fatalf("expected 3 artifacts, got %d", len(artifacts))
+		fatalf(t, "expected 3 artifacts, got %d", len(artifacts))
 	}
 
 	found := map[string]bool{}
 	for _, a := range artifacts {
 		found[a.Path] = true
 		if a.Path == "dist/cloudflare/wrangler.toml" && !contains(a.Content, []byte("name = \"example\"")) {
-			t.Fatalf("wrangler.toml missing project name: %s", string(a.Content))
+			fatalf(t, "wrangler.toml missing project name: %s", string(a.Content))
 		}
 		if a.Path == "dist/cloudflare/Makefile" {
 			if !contains(a.Content, []byte("npm install -g wrangler")) {
-				t.Fatalf("makefile missing npm install line: %s", string(a.Content))
+				fatalf(t, "makefile missing npm install line: %s", string(a.Content))
 			}
 			if !contains(a.Content, []byte("check-tools: deps")) {
-				t.Fatalf("makefile missing deps dependency: %s", string(a.Content))
+				fatalf(t, "makefile missing deps dependency: %s", string(a.Content))
 			}
 			if !contains(a.Content, []byte("deps:")) {
-				t.Fatalf("makefile missing deps target: %s", string(a.Content))
+				fatalf(t, "makefile missing deps target: %s", string(a.Content))
 			}
 		}
 	}
@@ -38,9 +42,14 @@ func TestRenderProducesArtifacts(t *testing.T) {
 	}
 	for _, path := range expected {
 		if !found[path] {
-			t.Fatalf("missing artifact %s", path)
+			fatalf(t, "missing artifact %s", path)
 		}
 	}
+}
+
+func fatalf(t *testing.T, format string, args ...any) {
+	t.Helper()
+	t.Fatalf(format, args...)
 }
 
 func contains(b, sub []byte) bool {

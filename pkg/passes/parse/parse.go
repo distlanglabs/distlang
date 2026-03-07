@@ -6,12 +6,12 @@ import (
 	"github.com/evanw/esbuild/pkg/api"
 )
 
-// Format controls how source is transformed.
+// Format controls how source is transformed for a backend build.
 type Format string
 
 const (
-	FormatGoja       Format = "goja"
-	FormatCloudflare        = "cloudflare"
+	FormatV8   Format = "v8"
+	FormatWasm Format = "wasm"
 )
 
 // ToScript transforms module-oriented JS into the requested format.
@@ -24,10 +24,7 @@ func ToScript(filename, source string, format Format) (string, error) {
 	}
 
 	switch format {
-	case FormatGoja:
-		opts.Format = api.FormatIIFE
-		opts.GlobalName = "distlangWorker"
-	case FormatCloudflare:
+	case FormatV8, FormatWasm:
 		opts.Format = api.FormatESModule
 	default:
 		return "", fmt.Errorf("unknown format: %s", format)

@@ -6,16 +6,14 @@ import (
 
 	"github.com/distlanglabs/distlang/pkg/passes"
 	parsepass "github.com/distlanglabs/distlang/pkg/passes/parse"
-	"github.com/distlanglabs/distlang/pkg/runtime"
-	runtimetypes "github.com/distlanglabs/distlang/pkg/runtime/types"
 )
 
-// Run executes debug passes and optionally runs the script.
-// Pass names: parse, ir, emit (emit is currently a placeholder printing source).
+// Run executes debug passes for a V8 backend build.
+// Pass names: parse, ir, emit.
 func Run(filePath string, passOrder []string, execute bool) error {
 	needIR := contains(passOrder, "ir")
 
-	result, err := passes.Execute(filePath, passes.Options{Format: parsepass.FormatGoja, NeedIR: needIR})
+	result, err := passes.Execute(filePath, passes.Options{Format: parsepass.FormatV8, NeedIR: needIR})
 	if err != nil {
 		return err
 	}
@@ -41,12 +39,7 @@ func Run(filePath string, passOrder []string, execute bool) error {
 	}
 
 	if execute {
-		engine := runtime.NewDefaultEngine()
-		resp, err := engine.RunWorker(filePath, result.Emitted, runtimetypes.Request{URL: "http://localhost/", Method: "GET", Headers: map[string]string{"host": "localhost"}})
-		if err != nil {
-			return fmt.Errorf("run: %w", err)
-		}
-		fmt.Printf("== run ==\nstatus: %d\n%s\n", resp.Status, resp.Body)
+		return fmt.Errorf("debug run is no longer available in-process; use `distlang run %s` to launch workerd and wasmtime", filePath)
 	}
 
 	return nil

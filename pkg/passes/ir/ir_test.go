@@ -3,7 +3,7 @@ package ir
 import "testing"
 
 func TestBuildIRConsoleLog(t *testing.T) {
-	src := `console.log("Hello from Goja!");`
+	src := `console.log("Hello from V8!");`
 	ir, err := Build("console.js", src)
 	if err != nil {
 		t.Fatalf("Build error: %v", err)

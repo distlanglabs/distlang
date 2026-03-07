@@ -1,9 +1,9 @@
 # distlang
 
 ## Current Status (Phase 0 POC)
-- Go CLI with a Goja-backed runtime.
-- ESM is transformed to Goja-friendly script via esbuild-based passes.
-- `run` serves a Worker-style `default.fetch` over HTTP (strict worker mode).
+- Go CLI with backend-oriented builds for V8 and Wasm.
+- ESM is transformed into backend-ready JS via esbuild-based passes.
+- `run` now prepares both local runtime paths: workerd and wasmtime.
 - Commands: `build`, `target`, `deploy`, `run`, `debug`.
 
 ## Requirements
@@ -27,11 +27,11 @@ make debug
 ```
 
 ## Commands
-- `build <file>`: build platform artifacts (goja + cloudflare) into `dist/` and print a summary.
+- `build <file>`: build backend artifacts (`v8`, `wasm`) and Cloudflare provider packaging into `dist/`.
 - `target init [--target=cloudflare] [--path=.]`: scaffold target files (including local env template) for a project/example.
 - `deploy <file> [--target=cloudflare]`: build and deploy to a target platform (cloudflare for now).
-- `run <file> [--port=N]`: start an HTTP server, load the worker, and route requests to `default.fetch` (strict worker mode; fails if `fetch` is missing).
-- `debug <build|run> <file> [--passes=...]`: print pass outputs (`parse`, `ir`, `emit`); with `run`, also execute `fetch` once.
+- `run <file> [--v8-port=N] [--wasm-port=N]`: build both backends, then start local workerd and wasmtime runtimes.
+- `debug <build|run> <file> [--passes=...]`: print pass outputs (`parse`, `ir`, `emit`); `debug run` now points you to `distlang run`.
 
 ## Example Worker
 ```js
@@ -41,13 +41,13 @@ export default {
   },
 };
 ```
-Run it locally (goja platform):
+Run it locally (dual-runtime mode):
 ```bash
 cd examples/helloworld
 make run
 ```
 
-Build artifacts (goja + cloudflare):
+Build artifacts (v8 + wasm + cloudflare package):
 ```bash
 cd examples/helloworld
 make build
@@ -64,10 +64,10 @@ make deploy
 ```
 
 ## Known Limitations
-- Minimal Web API shims (Request/Response/Headers are very limited).
-- No hot reload; worker is loaded once at startup.
-- Only Goja runtime backend; no WASM or other runtimes yet.
-- Strict worker mode only; plain scripts are not executed by `run`.
+- Wasm output is still a backend workspace placeholder until Distlang lowers IR to runnable Wasm artifacts.
+- `run` requires external `workerd` and `wasmtime` binaries.
+- No hot reload; worker processes are launched once per run invocation.
+- Strict worker-style entrypoints are still assumed on the V8 path.
 
 ## Roadmap
 See [ROADMAP.md](ROADMAP.md) for vision, architecture, and upcoming phases.
