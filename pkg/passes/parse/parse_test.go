@@ -25,19 +25,3 @@ func TestToScriptKeepsESMForV8(t *testing.T) {
 		t.Fatalf("unexpected global shim in v8 output: %s", out)
 	}
 }
-
-func TestToScriptKeepsESMForWasmWorkspace(t *testing.T) {
-	src := `export default { async fetch(request) { return new Response("ok") } }`
-
-	out, err := ToScript("index.js", src, FormatWasm)
-	if err != nil {
-		t.Fatalf("ToScript error: %v", err)
-	}
-
-	if !strings.Contains(out, "export") {
-		t.Fatalf("expected ESM export to remain for wasm workspace, got %s", out)
-	}
-	if strings.Contains(out, "distlangWorker") {
-		t.Fatalf("unexpected global shim in wasm output: %s", out)
-	}
-}

@@ -5,13 +5,11 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
-	"path/filepath"
 	"strconv"
 	"strings"
 
 	"github.com/distlanglabs/distlang/pkg/artifacts"
 	"github.com/distlanglabs/distlang/pkg/backend"
-	wasmrt "github.com/distlanglabs/distlang/pkg/runtime/wasmtime"
 	v8rt "github.com/distlanglabs/distlang/pkg/runtime/workerd"
 )
 
@@ -22,7 +20,6 @@ func runRun(args []string) int {
 	}
 
 	v8Port := 5656
-	wasmPort := 5757
 	filePath := ""
 
 	for _, arg := range args {
@@ -35,14 +32,6 @@ func runRun(args []string) int {
 				return 1
 			}
 			v8Port = port
-		case strings.HasPrefix(arg, "--wasm-port="):
-			val := strings.TrimPrefix(arg, "--wasm-port=")
-			port, err := parsePort(val)
-			if err != nil {
-				fmt.Fprintf(os.Stderr, "invalid wasm port: %s\n", val)
-				return 1
-			}
-			wasmPort = port
 		case strings.HasPrefix(arg, "-"):
 			fmt.Fprintf(os.Stderr, "unknown flag: %s\n", arg)
 			return 1
@@ -69,46 +58,23 @@ func runRun(args []string) int {
 		return 1
 	}
 
-	wasmOut, err := backend.BuildWasm(filePath)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "run failed: build wasm backend: %v\n", err)
-		return 1
-	}
-	if err := artifacts.WriteAll(wasmOut.Artifacts); err != nil {
-		fmt.Fprintf(os.Stderr, "run failed: write wasm artifacts: %v\n", err)
-		return 1
-	}
-
 	if _, err := exec.LookPath("workerd"); err != nil {
 		fmt.Fprintln(os.Stderr, "run failed: workerd not found in PATH")
-		return 1
-	}
-	if _, err := exec.LookPath("wasmtime"); err != nil {
-		fmt.Fprintln(os.Stderr, "run failed: wasmtime not found in PATH")
-		return 1
-	}
-	if filepath.Ext(wasmOut.EntryPath) != ".wasm" {
-		fmt.Fprintf(os.Stderr, "run failed: wasm backend is not runnable yet; expected a .wasm artifact, got %s\n", wasmOut.EntryPath)
 		return 1
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	errs := make(chan error, 2)
+	errs := make(chan error, 1)
 	v8Runner := v8rt.New()
-	wasmRunner := wasmrt.New()
 
 	go func() {
 		errs <- fmt.Errorf("v8 runtime: %w", v8Runner.Start(ctx, v8Out.EntryPath, v8Port))
 	}()
-	go func() {
-		errs <- fmt.Errorf("wasm runtime: %w", wasmRunner.Start(ctx, wasmOut.EntryPath, wasmPort))
-	}()
 
-	fmt.Printf("Starting local runtimes for %s\n", filePath)
-	fmt.Printf("- v8:   http://127.0.0.1:%d\n", v8Port)
-	fmt.Printf("- wasm: http://127.0.0.1:%d\n", wasmPort)
+	fmt.Printf("Starting local runtime for %s\n", filePath)
+	fmt.Printf("- v8: http://127.0.0.1:%d\n", v8Port)
 
 	err = <-errs
 	cancel()

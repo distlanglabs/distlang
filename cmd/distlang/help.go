@@ -12,7 +12,7 @@ var commands = []commandInfo{
 	{Name: "build", Description: "Build backend artifacts and provider packages", Usage: "distlang build <file>"},
 	{Name: "target", Description: "Manage target setup scaffolding", Usage: "distlang target <subcommand>"},
 	{Name: "deploy", Description: "Deploy a backend through a provider", Usage: "distlang deploy <file> [--target=cloudflare]"},
-	{Name: "run", Description: "Run local V8 and Wasm runtimes side by side", Usage: "distlang run <file> [--v8-port=N] [--wasm-port=N]"},
+	{Name: "run", Description: "Run the local V8 runtime", Usage: "distlang run <file> [--v8-port=N]"},
 	{Name: "debug", Description: "Inspect compiler passes for build or run", Usage: "distlang debug <build|run> <file> [--passes=parse,ir,emit]"},
 	{Name: "help", Description: "Show help for distlang", Usage: "distlang help"},
 }
@@ -26,7 +26,7 @@ func usage() {
 	fmt.Println("distlang - portable distributed app framework (POC)")
 	fmt.Println()
 	fmt.Println("Distlang is a capability-based framework for building portable serverless apps.")
-	fmt.Println("Current work focuses on backend-oriented builds for V8 and Wasm runtimes.")
+	fmt.Println("Current work focuses on the JavaScript worker path and provider packaging.")
 	fmt.Println()
 	fmt.Println("Usage:")
 	fmt.Println("  distlang <command> [arguments]")
@@ -69,7 +69,6 @@ func commandHelpBuild() {
 	fmt.Println("Usage: distlang build <file>")
 	fmt.Println("Outputs:")
 	fmt.Println("  - dist/v8/* backend artifacts")
-	fmt.Println("  - dist/wasm/* backend workspace")
 	fmt.Println("  - dist/cloudflare/* provider package from V8 output")
 }
 
@@ -97,13 +96,12 @@ func commandHelpTargetInit() {
 }
 
 func commandHelpRun() {
-	fmt.Println("run - Run local V8 and Wasm runtimes side by side")
-	fmt.Println("Usage: distlang run <file> [--v8-port=N] [--wasm-port=N]")
+	fmt.Println("run - Run the local V8 runtime")
+	fmt.Println("Usage: distlang run <file> [--v8-port=N]")
 	fmt.Println("Options:")
 	fmt.Println("  --v8-port=N     Port for local workerd (default: 5656)")
-	fmt.Println("  --wasm-port=N   Port for local wasmtime (default: 5757)")
 	fmt.Println("Notes:")
-	fmt.Println("  run builds both backends first, then launches workerd and wasmtime.")
+	fmt.Println("  run builds the V8 backend first, then launches workerd.")
 }
 
 func commandHelpDebug() {

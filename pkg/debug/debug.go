@@ -39,7 +39,7 @@ func Run(filePath string, passOrder []string, execute bool) error {
 	}
 
 	if execute {
-		return fmt.Errorf("debug run is no longer available in-process; use `distlang run %s` to launch workerd and wasmtime", filePath)
+		return fmt.Errorf("debug run is no longer available in-process; use `distlang run %s` to launch workerd", filePath)
 	}
 
 	return nil

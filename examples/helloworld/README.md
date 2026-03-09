@@ -10,7 +10,7 @@ make help
 make cloudflare-init
 # then set values in targets/cloudflare/cloudflare.env
 
-# run local v8 and wasm runtimes
+# run the local v8 runtime
 make run
 
 # inspect compile/debug passes
@@ -28,5 +28,5 @@ make deploy
 ```
 
 `make` targets automatically build the distlang CLI in the repo root first.
-`make run` expects local `workerd` and `wasmtime` binaries.
+`make run` expects local `workerd`.
 `make deploy` builds the example, loads `targets/cloudflare/cloudflare.env`, and then runs `make -C dist/cloudflare publish`.

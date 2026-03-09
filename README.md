@@ -1,9 +1,20 @@
 # distlang
 
+# Plan
+
+distlang will need to be split into two
+
+1. distlang-js
+   >> What is current right now. 
+   So providers will be cloudflare-workers, netlify deno functions to start with.
+   Get and echo app running with the control plane where the number of echos can be configured and the edge pipeline which responds with the echo.
+2. distlang-wasm
+  >> The wasm support will exist here. 
+
 ## Current Status (Phase 0 POC)
-- Go CLI with backend-oriented builds for V8 and Wasm.
+- Go CLI with a JavaScript worker build path and Cloudflare packaging.
 - ESM is transformed into backend-ready JS via esbuild-based passes.
-- `run` now prepares both local runtime paths: workerd and wasmtime.
+- `run` launches the local workerd runtime.
 - Commands: `build`, `target`, `deploy`, `run`, `debug`.
 
 ## Requirements
@@ -27,10 +38,10 @@ make debug
 ```
 
 ## Commands
-- `build <file>`: build backend artifacts (`v8`, `wasm`) and Cloudflare provider packaging into `dist/`.
+- `build <file>`: build backend artifacts (`v8`) and Cloudflare provider packaging into `dist/`.
 - `target init [--target=cloudflare] [--path=.]`: scaffold target files (including local env template) for a project/example.
 - `deploy <file> [--target=cloudflare]`: build and deploy to a target platform (cloudflare for now).
-- `run <file> [--v8-port=N] [--wasm-port=N]`: build both backends, then start local workerd and wasmtime runtimes.
+- `run <file> [--v8-port=N]`: build the V8 backend, then start local workerd.
 - `debug <build|run> <file> [--passes=...]`: print pass outputs (`parse`, `ir`, `emit`); `debug run` now points you to `distlang run`.
 
 ## Example Worker
@@ -41,13 +52,13 @@ export default {
   },
 };
 ```
-Run it locally (dual-runtime mode):
+Run it locally:
 ```bash
 cd examples/helloworld
 make run
 ```
 
-Build artifacts (v8 + wasm + cloudflare package):
+Build artifacts (v8 + cloudflare package):
 ```bash
 cd examples/helloworld
 make build
@@ -64,8 +75,7 @@ make deploy
 ```
 
 ## Known Limitations
-- Wasm output is still a backend workspace placeholder until Distlang lowers IR to runnable Wasm artifacts.
-- `run` requires external `workerd` and `wasmtime` binaries.
+- `run` requires external `workerd`.
 - No hot reload; worker processes are launched once per run invocation.
 - Strict worker-style entrypoints are still assumed on the V8 path.
 

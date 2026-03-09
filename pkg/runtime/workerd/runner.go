@@ -40,17 +40,16 @@ func (Runner) Start(ctx context.Context, entryPath string, port int) error {
 	content := fmt.Sprintf(`using Workerd = import "/workerd/workerd.capnp";
 const config :Workerd.Config = (
   services = [
-    ( name = "distlang", worker = .distlangWorker )
+    (
+      name = "distlang",
+      worker = (
+        compatibilityDate = "2024-01-01",
+        modules = [ (name = "worker", esModule = embed "worker.js") ]
+      )
+    )
   ],
   sockets = [
     ( name = "http", address = "127.0.0.1:%d", http = (), service = "distlang" )
-  ],
-  workers = [
-    (
-      name = "distlangWorker",
-      compatibilityDate = "2024-01-01",
-      modules = [ (name = "worker", esModule = embed "worker.js") ]
-    )
   ]
 );
 `, port)
@@ -58,7 +57,7 @@ const config :Workerd.Config = (
 		return err
 	}
 
-	cmd := exec.CommandContext(ctx, "workerd", "serve", config)
+	cmd := exec.CommandContext(ctx, "workerd", "serve", config, "config")
 	cmd.Dir = tmpDir
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr

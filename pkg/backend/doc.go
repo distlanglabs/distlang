@@ -1,2 +1,2 @@
-// Package backend builds execution-model artifacts such as v8 and wasm.
+// Package backend builds execution-model artifacts for the current JS runtime path.
 package backend

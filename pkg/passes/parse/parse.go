@@ -10,8 +10,7 @@ import (
 type Format string
 
 const (
-	FormatV8   Format = "v8"
-	FormatWasm Format = "wasm"
+	FormatV8 Format = "v8"
 )
 
 // ToScript transforms module-oriented JS into the requested format.
@@ -24,7 +23,7 @@ func ToScript(filename, source string, format Format) (string, error) {
 	}
 
 	switch format {
-	case FormatV8, FormatWasm:
+	case FormatV8:
 		opts.Format = api.FormatESModule
 	default:
 		return "", fmt.Errorf("unknown format: %s", format)

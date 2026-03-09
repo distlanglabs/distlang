@@ -21,25 +21,17 @@ func runBuild(args []string) int {
 		return 1
 	}
 
-	results, errs := backend.BuildAll(filePath)
-
-	hasError := len(errs) > 0
-	for name, err := range errs {
-		fmt.Fprintf(os.Stderr, "%s: %v\n", name, err)
-	}
-
-	for _, res := range results {
-		if err := artifacts.WriteAll(res.Artifacts); err != nil {
-			fmt.Fprintf(os.Stderr, "%s: write artifacts: %v\n", res.Backend, err)
-			hasError = true
-		}
-	}
-
 	v8Out, err := backend.BuildV8(filePath)
+	hasError := false
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "cloudflare: package provider artifacts: %v\n", err)
+		fmt.Fprintf(os.Stderr, "v8: build backend artifacts: %v\n", err)
 		hasError = true
 	} else {
+		if err := artifacts.WriteAll(v8Out.Artifacts); err != nil {
+			fmt.Fprintf(os.Stderr, "v8: write artifacts: %v\n", err)
+			hasError = true
+		}
+
 		projectName := fileBase(filePath)
 		packaged, err := cloudflareprovider.Package(v8Out, cloudflareprovider.Context{ProjectName: projectName})
 		if err != nil {
@@ -56,17 +48,8 @@ func runBuild(args []string) int {
 		return 1
 	}
 
-	fmt.Printf("Build succeeded for %d backends\n", len(results))
-	for _, res := range results {
-		fmt.Printf("- %s: ", res.Backend)
-		for i, art := range res.Artifacts {
-			if i > 0 {
-				fmt.Print(", ")
-			}
-			fmt.Print(art.Path)
-		}
-		fmt.Println()
-	}
+	fmt.Println("Build succeeded")
+	fmt.Println("- v8: dist/v8/worker.js")
 	fmt.Println("- cloudflare: dist/cloudflare/worker.js, dist/cloudflare/wrangler.toml, dist/cloudflare/Makefile")
 
 	return 0
