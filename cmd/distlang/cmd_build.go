@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/distlanglabs/distlang/pkg/artifacts"
 	"github.com/distlanglabs/distlang/pkg/backend"
@@ -32,14 +33,19 @@ func runBuild(args []string) int {
 			hasError = true
 		}
 
-		projectName := fileBase(filePath)
-		packaged, err := cloudflareprovider.Package(v8Out, cloudflareprovider.Context{ProjectName: projectName})
+		ctx, err := cloudflareBuildContext(filePath)
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "cloudflare: package provider artifacts: %v\n", err)
+			fmt.Fprintf(os.Stderr, "cloudflare: load target config: %v\n", err)
 			hasError = true
-		} else if err := artifacts.WriteAll(packaged); err != nil {
-			fmt.Fprintf(os.Stderr, "cloudflare: write artifacts: %v\n", err)
-			hasError = true
+		} else {
+			packaged, err := cloudflareprovider.Package(v8Out, ctx)
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "cloudflare: package provider artifacts: %v\n", err)
+				hasError = true
+			} else if err := artifacts.WriteAll(packaged); err != nil {
+				fmt.Fprintf(os.Stderr, "cloudflare: write artifacts: %v\n", err)
+				hasError = true
+			}
 		}
 	}
 
@@ -51,8 +57,32 @@ func runBuild(args []string) int {
 	fmt.Println("Build succeeded")
 	fmt.Println("- v8: dist/v8/worker.js")
 	fmt.Println("- cloudflare: dist/cloudflare/worker.js, dist/cloudflare/wrangler.toml, dist/cloudflare/Makefile")
+	fmt.Println("- generated helpers: generated/distlang/core/* (when distlang/core is imported)")
 
 	return 0
+}
+
+func cloudflareBuildContext(filePath string) (cloudflareprovider.Context, error) {
+	absFilePath, err := filepath.Abs(filePath)
+	if err != nil {
+		return cloudflareprovider.Context{}, err
+	}
+
+	ctx := cloudflareprovider.Context{
+		ProjectName:   fileBase(filePath),
+		KVBindingName: "DISTLANG_KV",
+	}
+
+	envPath := filepath.Join(filepath.Dir(absFilePath), "targets", "cloudflare", "cloudflare.env")
+	values, err := loadEnvFile(envPath)
+	if err != nil {
+		return cloudflareprovider.Context{}, err
+	}
+
+	ctx.KVNamespaceID = strings.TrimSpace(values["CLOUDFLARE_KV_NAMESPACE_ID"])
+	ctx.KVPreviewID = strings.TrimSpace(values["CLOUDFLARE_KV_PREVIEW_ID"])
+
+	return ctx, nil
 }
 
 func fileBase(filePath string) string {

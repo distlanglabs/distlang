@@ -3,6 +3,7 @@ package passes
 import (
 	"fmt"
 
+	"github.com/distlanglabs/distlang/pkg/artifacts"
 	"github.com/distlanglabs/distlang/pkg/passes/emit"
 	"github.com/distlanglabs/distlang/pkg/passes/ir"
 	parsepass "github.com/distlanglabs/distlang/pkg/passes/parse"
@@ -15,6 +16,7 @@ type Result struct {
 	Transformed string
 	IR          *ir.IR
 	Emitted     string
+	Artifacts   []artifacts.Artifact
 }
 
 // Options controls pipeline execution.
@@ -33,20 +35,21 @@ func Execute(filePath string, opts Options) (Result, error) {
 	}
 	res.Source = src
 
-	transformed, err := parsepass.ToScript(filePath, src, opts.Format)
+	parsed, err := parsepass.ToScriptWithOptions(filePath, src, parsepass.Options{Format: opts.Format})
 	if err != nil {
 		return res, fmt.Errorf("parse: %w", err)
 	}
-	res.Transformed = transformed
+	res.Transformed = parsed.Code
+	res.Artifacts = parsed.Artifacts
 
 	if opts.NeedIR {
-		built, err := ir.Build(filePath, transformed)
+		built, err := ir.Build(filePath, parsed.Code)
 		if err != nil {
 			return res, fmt.Errorf("ir: %w", err)
 		}
 		res.IR = built
 	}
 
-	res.Emitted = emit.Source(transformed)
+	res.Emitted = emit.Source(parsed.Code)
 	return res, nil
 }

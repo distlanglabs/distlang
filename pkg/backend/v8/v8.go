@@ -24,5 +24,7 @@ func Build(filePath string) (Output, error) {
 
 	entry := filepath.Join("dist", "v8", "worker.js")
 	artifact := artifacts.Artifact{Path: entry, Content: []byte(out.Emitted)}
-	return Output{EntryPath: entry, Emitted: out.Emitted, Artifacts: []artifacts.Artifact{artifact}}, nil
+	items := append([]artifacts.Artifact{}, out.Artifacts...)
+	items = append(items, artifact)
+	return Output{EntryPath: entry, Emitted: out.Emitted, Artifacts: items}, nil
 }

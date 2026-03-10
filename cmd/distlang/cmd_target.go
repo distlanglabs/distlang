@@ -89,10 +89,10 @@ func initCloudflareTarget(basePath string) error {
 	envExamplePath := filepath.Join(targetDir, "cloudflare.env.example")
 	envPath := filepath.Join(targetDir, "cloudflare.env")
 
-	if err := writeFileIfMissing(envExamplePath, []byte("# Copy to cloudflare.env and fill values.\nCLOUDFLARE_API_TOKEN=\nCLOUDFLARE_ACCOUNT_ID=\n")); err != nil {
+	if err := writeFileIfMissing(envExamplePath, []byte("# Copy to cloudflare.env and fill values.\nCLOUDFLARE_API_TOKEN=\nCLOUDFLARE_ACCOUNT_ID=\nCLOUDFLARE_KV_NAMESPACE_ID=\nCLOUDFLARE_KV_PREVIEW_ID=\n")); err != nil {
 		return err
 	}
-	if err := writeFileIfMissing(envPath, []byte("# Local Cloudflare deploy credentials (do not commit).\nCLOUDFLARE_API_TOKEN=\nCLOUDFLARE_ACCOUNT_ID=\n")); err != nil {
+	if err := writeFileIfMissing(envPath, []byte("# Local Cloudflare deploy credentials (do not commit).\nCLOUDFLARE_API_TOKEN=\nCLOUDFLARE_ACCOUNT_ID=\nCLOUDFLARE_KV_NAMESPACE_ID=\nCLOUDFLARE_KV_PREVIEW_ID=\n")); err != nil {
 		return err
 	}
 

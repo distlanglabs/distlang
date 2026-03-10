@@ -87,7 +87,12 @@ func runDeploy(args []string) int {
 		return 1
 	}
 
-	res, err := cloudflareprovider.Package(v8Out, cloudflareprovider.Context{ProjectName: fileBase(absFilePath)})
+	res, err := cloudflareprovider.Package(v8Out, cloudflareprovider.Context{
+		ProjectName:   fileBase(absFilePath),
+		KVBindingName: "DISTLANG_KV",
+		KVNamespaceID: strings.TrimSpace(deployEnv["CLOUDFLARE_KV_NAMESPACE_ID"]),
+		KVPreviewID:   strings.TrimSpace(deployEnv["CLOUDFLARE_KV_PREVIEW_ID"]),
+	})
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "deploy failed: package cloudflare artifacts: %v\n", err)
 		return 1
@@ -122,6 +127,7 @@ func runDeploy(args []string) int {
 
 func cloudflareDeployEnv(envPath string) (map[string]string, error) {
 	required := []string{"CLOUDFLARE_API_TOKEN", "CLOUDFLARE_ACCOUNT_ID"}
+	optional := []string{"CLOUDFLARE_KV_NAMESPACE_ID", "CLOUDFLARE_KV_PREVIEW_ID"}
 
 	fromFile, err := loadEnvFile(envPath)
 	if err != nil {
@@ -130,6 +136,15 @@ func cloudflareDeployEnv(envPath string) (map[string]string, error) {
 
 	values := map[string]string{}
 	for _, key := range required {
+		if v := strings.TrimSpace(os.Getenv(key)); v != "" {
+			values[key] = v
+			continue
+		}
+		if v := strings.TrimSpace(fromFile[key]); v != "" {
+			values[key] = v
+		}
+	}
+	for _, key := range optional {
 		if v := strings.TrimSpace(os.Getenv(key)); v != "" {
 			values[key] = v
 			continue

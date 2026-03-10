@@ -7,7 +7,12 @@ import (
 )
 
 func TestPackageProducesArtifacts(t *testing.T) {
-	artifacts, err := Package(v8backend.Output{Emitted: "console.log('hi')"}, Context{ProjectName: "example"})
+	artifacts, err := Package(v8backend.Output{Emitted: "console.log('hi')"}, Context{
+		ProjectName:   "example",
+		KVBindingName: "DISTLANG_KV",
+		KVNamespaceID: "namespace-123",
+		KVPreviewID:   "preview-456",
+	})
 	if err != nil {
 		fatalf(t, "Package error: %v", err)
 	}
@@ -21,6 +26,12 @@ func TestPackageProducesArtifacts(t *testing.T) {
 		found[a.Path] = true
 		if a.Path == "dist/cloudflare/wrangler.toml" && !contains(a.Content, []byte("name = \"example\"")) {
 			fatalf(t, "wrangler.toml missing project name: %s", string(a.Content))
+		}
+		if a.Path == "dist/cloudflare/wrangler.toml" && !contains(a.Content, []byte("binding = \"DISTLANG_KV\"")) {
+			fatalf(t, "wrangler.toml missing kv binding: %s", string(a.Content))
+		}
+		if a.Path == "dist/cloudflare/wrangler.toml" && !contains(a.Content, []byte("id = \"namespace-123\"")) {
+			fatalf(t, "wrangler.toml missing kv id: %s", string(a.Content))
 		}
 		if a.Path == "dist/cloudflare/Makefile" {
 			if !contains(a.Content, []byte("npm install -g wrangler")) {

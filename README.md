@@ -6,8 +6,11 @@ distlang will need to be split into two
 
 1. distlang-js
    >> What is current right now. 
-   So providers will be cloudflare-workers, netlify deno functions to start with.
-   Get and echo app running with the control plane where the number of echos can be configured and the edge pipeline which responds with the echo.
+   >> Add support for db in the helloWorld program.
+      For Cloudflare add support for KV. So in code they could write import distlang/core and then we will load the code to read the KV and write to KV. 
+      CRUD methods for a generic DB maybe call distland.ObjectDB.<crud>
+      While building it should add the code for the KV Cruds for now. 
+   >> Add support for metrics in the helloWorld program.
 2. distlang-wasm
   >> The wasm support will exist here. 
 
