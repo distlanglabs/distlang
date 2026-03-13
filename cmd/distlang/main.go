@@ -42,6 +42,10 @@ func main() {
 			commandHelpDeploy()
 		case "helpers":
 			commandHelpHelpers()
+		case "helpers-store", "helpersstore":
+			commandHelpHelpersStore()
+		case "helpers-store-objectdb", "helpersstoreobjectdb":
+			commandHelpHelpersStoreObjectDB()
 		case "helpers-login", "helperslogin":
 			commandHelpHelpersLogin()
 		case "helpers-whoami", "helperswhoami":

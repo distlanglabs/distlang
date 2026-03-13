@@ -12,7 +12,7 @@ var commands = []commandInfo{
 	{Name: "build", Description: "Build backend artifacts and provider packages", Usage: "distlang build <file>"},
 	{Name: "target", Description: "Manage target setup scaffolding", Usage: "distlang target <subcommand>"},
 	{Name: "deploy", Description: "Deploy a backend through a provider", Usage: "distlang deploy <file> [--target=cloudflare]"},
-	{Name: "helpers", Description: "Manage Distlang helper auth session", Usage: "distlang helpers <login|whoami|logout>"},
+	{Name: "helpers", Description: "Manage Distlang helper auth session and store access", Usage: "distlang helpers <login|store|whoami|logout>"},
 	{Name: "run", Description: "Run the local V8 runtime", Usage: "distlang run <file> [--v8-port=N]"},
 	{Name: "debug", Description: "Inspect compiler passes for build or run", Usage: "distlang debug <build|run> <file> [--passes=parse,ir,emit]"},
 	{Name: "help", Description: "Show help for distlang", Usage: "distlang help"},
@@ -62,6 +62,12 @@ func fullHelp() {
 	commandHelpHelpers()
 	fmt.Println()
 	fmt.Println("---")
+	commandHelpHelpersStore()
+	fmt.Println()
+	fmt.Println("---")
+	commandHelpHelpersStoreObjectDB()
+	fmt.Println()
+	fmt.Println("---")
 	commandHelpRun()
 	fmt.Println()
 	fmt.Println("---")
@@ -92,14 +98,90 @@ func commandHelpTarget() {
 }
 
 func commandHelpHelpers() {
-	fmt.Println("helpers - Manage Distlang helper auth session")
-	fmt.Println("Usage: distlang helpers <login|whoami|logout>")
+	fmt.Println("helpers - Manage Distlang helper auth session and store access")
+	fmt.Println("Usage: distlang helpers <login|store|whoami|logout>")
 	fmt.Println("Subcommands:")
 	fmt.Println("  login    Start browser-based login against Distlang auth")
+	fmt.Println("  store    Access authenticated helper store services")
 	fmt.Println("  whoami   Show the current helper auth user")
 	fmt.Println("  logout   Revoke local helper auth session")
 	fmt.Println("Environment:")
 	fmt.Println("  DISTLANG_AUTH_BASE_URL   Override auth service base URL (default: https://auth.distlang.com)")
+	fmt.Println("  DISTLANG_STORE_BASE_URL  Override store API base URL (default: https://api.distlang.com)")
+}
+
+func commandHelpHelpersStore() {
+	fmt.Println("helpers store - Access authenticated helper store services")
+	fmt.Println("Usage: distlang helpers store <objectdb>")
+	fmt.Println("Subcommands:")
+	fmt.Println("  objectdb   Manage ObjectDB buckets, keys, and values")
+	fmt.Println("Environment:")
+	fmt.Println("  DISTLANG_STORE_BASE_URL  Override store API base URL (default: https://api.distlang.com)")
+}
+
+func commandHelpHelpersStoreObjectDB() {
+	fmt.Println("helpers store objectdb - Manage authenticated ObjectDB data")
+	fmt.Println("Usage: distlang helpers store objectdb <status|buckets|keys|put|get|head|delete>")
+	fmt.Println("Subcommands:")
+	fmt.Println("  status               Show ObjectDB service status for the logged-in user")
+	fmt.Println("  buckets list         List buckets")
+	fmt.Println("  buckets create NAME  Create a bucket")
+	fmt.Println("  buckets exists NAME  Check whether a bucket exists")
+	fmt.Println("  buckets delete NAME  Delete an empty bucket")
+	fmt.Println("  keys list BUCKET     List keys in a bucket (keys only supports list)")
+	fmt.Println("  put BUCKET KEY       Write a value with --file= or --text=")
+	fmt.Println("  get BUCKET KEY       Read a value with --type=text|json|bytes")
+	fmt.Println("  head BUCKET KEY      Show value metadata")
+	fmt.Println("  delete BUCKET KEY    Delete a value")
+}
+
+func commandHelpHelpersStoreObjectDBStatus() {
+	fmt.Println("helpers store objectdb status - Show ObjectDB service status")
+	fmt.Println("Usage: distlang helpers store objectdb status")
+	fmt.Println("Notes:")
+	fmt.Println("  Uses the saved helper auth session and prints the effective store base URL")
+}
+
+func commandHelpHelpersStoreObjectDBBuckets() {
+	fmt.Println("helpers store objectdb buckets - Manage ObjectDB buckets")
+	fmt.Println("Usage: distlang helpers store objectdb buckets <list|create|exists|delete> [bucket]")
+	fmt.Println("Examples:")
+	fmt.Println("  distlang helpers store objectdb buckets list")
+	fmt.Println("  distlang helpers store objectdb buckets create demo")
+	fmt.Println("  distlang helpers store objectdb buckets exists demo")
+	fmt.Println("  distlang helpers store objectdb buckets delete demo")
+}
+
+func commandHelpHelpersStoreObjectDBKeys() {
+	fmt.Println("helpers store objectdb keys - List ObjectDB keys")
+	fmt.Println("Usage: distlang helpers store objectdb keys list <bucket> [--prefix=value] [--limit=N] [--cursor=value]")
+	fmt.Println("Notes:")
+	fmt.Println("  Prints each key with metadata when available, followed by pagination status")
+	fmt.Println("  Value writes and reads use `distlang helpers store objectdb put|get|head|delete`")
+}
+
+func commandHelpHelpersStoreObjectDBPut() {
+	fmt.Println("helpers store objectdb put - Write an ObjectDB value")
+	fmt.Println("Usage: distlang helpers store objectdb put <bucket> <key> [--file=path | --text=value] [--content-type=type]")
+	fmt.Println("Notes:")
+	fmt.Println("  Exactly one of --file or --text is required")
+}
+
+func commandHelpHelpersStoreObjectDBGet() {
+	fmt.Println("helpers store objectdb get - Read an ObjectDB value")
+	fmt.Println("Usage: distlang helpers store objectdb get <bucket> <key> [--type=text|json|bytes] [--output=path]")
+	fmt.Println("Notes:")
+	fmt.Println("  --type=text is the default; --type=bytes requires --output to avoid dumping binary to the terminal")
+}
+
+func commandHelpHelpersStoreObjectDBHead() {
+	fmt.Println("helpers store objectdb head - Show ObjectDB value metadata")
+	fmt.Println("Usage: distlang helpers store objectdb head <bucket> <key>")
+}
+
+func commandHelpHelpersStoreObjectDBDelete() {
+	fmt.Println("helpers store objectdb delete - Delete an ObjectDB value")
+	fmt.Println("Usage: distlang helpers store objectdb delete <bucket> <key>")
 }
 
 func commandHelpHelpersLogin() {

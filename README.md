@@ -44,15 +44,20 @@ make debug
 - `build <file>`: build backend artifacts (`v8`) and Cloudflare provider packaging into `dist/`.
 - `target init [--target=cloudflare] [--path=.]`: scaffold target files (including local env template) for a project/example.
 - `deploy <file> [--target=cloudflare]`: build and deploy to a target platform (cloudflare for now).
-- `helpers <login|whoami|logout>`: manage the Distlang helper auth session used for future control-plane access.
+- `helpers <login|store|whoami|logout>`: manage the Distlang helper auth session and authenticated store access.
 - `run <file> [--v8-port=N]`: build the V8 backend, then start local workerd.
 - `debug <build|run> <file> [--passes=...]`: print pass outputs (`parse`, `ir`, `emit`); `debug run` now points you to `distlang run`.
 
 ## Helper Auth
 - `distlang helpers login`: opens the browser for Google auth and stores a local session.
+- `distlang helpers store objectdb status`: confirms store access for the logged-in user.
+- `distlang helpers store objectdb buckets list|create|exists|delete`: manage ObjectDB buckets.
+- `distlang helpers store objectdb keys list <bucket>`: list keys in a bucket with optional pagination flags.
+- `distlang helpers store objectdb put|get|head|delete <bucket> <key>`: manage ObjectDB values; `keys` only supports `list`.
 - `distlang helpers whoami`: refreshes the session when needed and prints the current user.
 - `distlang helpers logout`: revokes the remote refresh token and clears the local session.
 - `DISTLANG_AUTH_BASE_URL`: optional auth service override for local testing; defaults to `https://auth.distlang.com`.
+- `DISTLANG_STORE_BASE_URL`: optional store service override for local testing; defaults to `https://api.distlang.com`.
 
 ## Example Worker
 ```js
