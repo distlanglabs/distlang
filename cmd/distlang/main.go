@@ -40,6 +40,14 @@ func main() {
 			commandHelpTargetInit()
 		case "deploy":
 			commandHelpDeploy()
+		case "helpers":
+			commandHelpHelpers()
+		case "helpers-login", "helperslogin":
+			commandHelpHelpersLogin()
+		case "helpers-whoami", "helperswhoami":
+			commandHelpHelpersWhoami()
+		case "helpers-logout", "helperslogout":
+			commandHelpHelpersLogout()
 		case "run":
 			commandHelpRun()
 		case "debug":
@@ -60,6 +68,8 @@ func main() {
 		os.Exit(runTarget(args))
 	case "deploy":
 		os.Exit(runDeploy(args))
+	case "helpers":
+		os.Exit(runHelpers(args))
 	case "run":
 		os.Exit(runRun(args))
 	case "debug":

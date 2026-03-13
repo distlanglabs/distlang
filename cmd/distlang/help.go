@@ -12,6 +12,7 @@ var commands = []commandInfo{
 	{Name: "build", Description: "Build backend artifacts and provider packages", Usage: "distlang build <file>"},
 	{Name: "target", Description: "Manage target setup scaffolding", Usage: "distlang target <subcommand>"},
 	{Name: "deploy", Description: "Deploy a backend through a provider", Usage: "distlang deploy <file> [--target=cloudflare]"},
+	{Name: "helpers", Description: "Manage Distlang helper auth session", Usage: "distlang helpers <login|whoami|logout>"},
 	{Name: "run", Description: "Run the local V8 runtime", Usage: "distlang run <file> [--v8-port=N]"},
 	{Name: "debug", Description: "Inspect compiler passes for build or run", Usage: "distlang debug <build|run> <file> [--passes=parse,ir,emit]"},
 	{Name: "help", Description: "Show help for distlang", Usage: "distlang help"},
@@ -58,6 +59,9 @@ func fullHelp() {
 	commandHelpDeploy()
 	fmt.Println()
 	fmt.Println("---")
+	commandHelpHelpers()
+	fmt.Println()
+	fmt.Println("---")
 	commandHelpRun()
 	fmt.Println()
 	fmt.Println("---")
@@ -85,6 +89,39 @@ func commandHelpTarget() {
 	fmt.Println("Usage: distlang target <subcommand>")
 	fmt.Println("Subcommands:")
 	fmt.Println("  init   Create target scaffolding for a project directory")
+}
+
+func commandHelpHelpers() {
+	fmt.Println("helpers - Manage Distlang helper auth session")
+	fmt.Println("Usage: distlang helpers <login|whoami|logout>")
+	fmt.Println("Subcommands:")
+	fmt.Println("  login    Start browser-based login against Distlang auth")
+	fmt.Println("  whoami   Show the current helper auth user")
+	fmt.Println("  logout   Revoke local helper auth session")
+	fmt.Println("Environment:")
+	fmt.Println("  DISTLANG_AUTH_BASE_URL   Override auth service base URL (default: https://auth.distlang.com)")
+}
+
+func commandHelpHelpersLogin() {
+	fmt.Println("helpers login - Start browser-based helper login")
+	fmt.Println("Usage: distlang helpers login")
+	fmt.Println("Notes:")
+	fmt.Println("  Opens the browser to Google login, then listens on http://127.0.0.1:8976/callback")
+	fmt.Println("  Stores the resulting session in your user config directory")
+}
+
+func commandHelpHelpersWhoami() {
+	fmt.Println("helpers whoami - Show current helper auth user")
+	fmt.Println("Usage: distlang helpers whoami")
+	fmt.Println("Notes:")
+	fmt.Println("  Refreshes the local session automatically when needed")
+}
+
+func commandHelpHelpersLogout() {
+	fmt.Println("helpers logout - Clear current helper auth session")
+	fmt.Println("Usage: distlang helpers logout")
+	fmt.Println("Notes:")
+	fmt.Println("  Revokes the remote refresh token when available and clears the local session")
 }
 
 func commandHelpTargetInit() {

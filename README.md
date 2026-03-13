@@ -18,7 +18,7 @@ distlang will need to be split into two
 - Go CLI with a JavaScript worker build path and Cloudflare packaging.
 - ESM is transformed into backend-ready JS via esbuild-based passes.
 - `run` launches the local workerd runtime.
-- Commands: `build`, `target`, `deploy`, `run`, `debug`.
+- Commands: `build`, `target`, `deploy`, `helpers`, `run`, `debug`.
 
 ## Requirements
 - Go 1.21+
@@ -44,8 +44,15 @@ make debug
 - `build <file>`: build backend artifacts (`v8`) and Cloudflare provider packaging into `dist/`.
 - `target init [--target=cloudflare] [--path=.]`: scaffold target files (including local env template) for a project/example.
 - `deploy <file> [--target=cloudflare]`: build and deploy to a target platform (cloudflare for now).
+- `helpers <login|whoami|logout>`: manage the Distlang helper auth session used for future control-plane access.
 - `run <file> [--v8-port=N]`: build the V8 backend, then start local workerd.
 - `debug <build|run> <file> [--passes=...]`: print pass outputs (`parse`, `ir`, `emit`); `debug run` now points you to `distlang run`.
+
+## Helper Auth
+- `distlang helpers login`: opens the browser for Google auth and stores a local session.
+- `distlang helpers whoami`: refreshes the session when needed and prints the current user.
+- `distlang helpers logout`: revokes the remote refresh token and clears the local session.
+- `DISTLANG_AUTH_BASE_URL`: optional auth service override for local testing; defaults to `https://auth.distlang.com`.
 
 ## Example Worker
 ```js
