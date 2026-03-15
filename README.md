@@ -1,5 +1,9 @@
 # distlang
 
+Website: [distlang.com](https://distlang.com)
+
+API docs: [api.distlang.com/docs](https://api.distlang.com/docs)
+
 ## Install
 
 Linux/macOS:
