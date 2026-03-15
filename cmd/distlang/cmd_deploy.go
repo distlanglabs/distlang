@@ -11,6 +11,7 @@ import (
 	"strings"
 
 	"github.com/distlanglabs/distlang/pkg/artifacts"
+	"github.com/distlanglabs/distlang/pkg/auth"
 	"github.com/distlanglabs/distlang/pkg/backend"
 	cloudflareprovider "github.com/distlanglabs/distlang/pkg/provider/cloudflare"
 )
@@ -81,6 +82,16 @@ func runDeploy(args []string) int {
 		return 1
 	}
 
+	usesHelpers := sourceUsesDistlangHelpers(absFilePath)
+	serviceToken := ""
+	if usesHelpers {
+		serviceToken, err = resolveHelpersServiceToken(deployEnv)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "deploy failed: %v\n", err)
+			return 1
+		}
+	}
+
 	v8Out, err := backend.BuildV8(absFilePath)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "deploy failed: build v8 backend: %v\n", err)
@@ -92,6 +103,8 @@ func runDeploy(args []string) int {
 		KVBindingName: "DISTLANG_KV",
 		KVNamespaceID: strings.TrimSpace(deployEnv["CLOUDFLARE_KV_NAMESPACE_ID"]),
 		KVPreviewID:   strings.TrimSpace(deployEnv["CLOUDFLARE_KV_PREVIEW_ID"]),
+		StoreBaseURL:  strings.TrimSpace(deployEnv["DISTLANG_STORE_BASE_URL"]),
+		HelpersMode:   helpersModeForDeploy(deployEnv, usesHelpers),
 	})
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "deploy failed: package cloudflare artifacts: %v\n", err)
@@ -107,6 +120,13 @@ func runDeploy(args []string) int {
 		fmt.Fprintln(os.Stderr, "deploy failed: wrangler not found in PATH")
 		fmt.Fprintln(os.Stderr, "install it with: npm install -g wrangler")
 		return 1
+	}
+
+	if usesHelpers {
+		if err := putWranglerSecret(filepath.Join("dist", "cloudflare"), deployEnv, "DISTLANG_SERVICE_TOKEN", serviceToken); err != nil {
+			fmt.Fprintf(os.Stderr, "deploy failed: %v\n", err)
+			return 1
+		}
 	}
 
 	fmt.Println("Deploying to Cloudflare...")
@@ -125,9 +145,68 @@ func runDeploy(args []string) int {
 	return 0
 }
 
+func sourceUsesDistlangHelpers(filePath string) bool {
+	data, err := os.ReadFile(filePath)
+	if err != nil {
+		return false
+	}
+	source := string(data)
+	return strings.Contains(source, `from "distlang"`) || strings.Contains(source, "from 'distlang'")
+}
+
+func resolveHelpersServiceToken(deployEnv map[string]string) (string, error) {
+	if token := strings.TrimSpace(os.Getenv("DISTLANG_SERVICE_TOKEN")); token != "" {
+		return token, nil
+	}
+	if token := strings.TrimSpace(deployEnv["DISTLANG_SERVICE_TOKEN"]); token != "" {
+		return token, nil
+	}
+
+	authClient := auth.NewClient(auth.ResolveBaseURL())
+	session, err := authClient.EnsureSession()
+	if err != nil {
+		return "", fmt.Errorf("helpers.ObjectDB requires login for deploy: %w", err)
+	}
+	serviceToken, err := authClient.ServiceToken(session.AccessToken, "objectdb", false)
+	if err != nil {
+		return "", fmt.Errorf("fetch service token: %w", err)
+	}
+	return strings.TrimSpace(serviceToken.AccessToken), nil
+}
+
+func putWranglerSecret(dir string, env map[string]string, key, value string) error {
+	if strings.TrimSpace(value) == "" {
+		return fmt.Errorf("missing value for secret %s", key)
+	}
+	fmt.Printf("Updating Cloudflare secret %s...\n", key)
+	cmd := exec.Command("wrangler", "secret", "put", key)
+	cmd.Dir = dir
+	cmd.Env = mergedEnv(env)
+	cmd.Stdin = strings.NewReader(value + "\n")
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	if err := cmd.Run(); err != nil {
+		return fmt.Errorf("set wrangler secret %s: %w", key, err)
+	}
+	return nil
+}
+
+func helpersModeForDeploy(deployEnv map[string]string, usesHelpers bool) string {
+	if mode := strings.TrimSpace(os.Getenv("DISTLANG_HELPERS_MODE")); mode != "" {
+		return mode
+	}
+	if mode := strings.TrimSpace(deployEnv["DISTLANG_HELPERS_MODE"]); mode != "" {
+		return mode
+	}
+	if usesHelpers {
+		return "live"
+	}
+	return ""
+}
+
 func cloudflareDeployEnv(envPath string) (map[string]string, error) {
 	required := []string{"CLOUDFLARE_API_TOKEN", "CLOUDFLARE_ACCOUNT_ID"}
-	optional := []string{"CLOUDFLARE_KV_NAMESPACE_ID", "CLOUDFLARE_KV_PREVIEW_ID"}
+	optional := []string{"CLOUDFLARE_KV_NAMESPACE_ID", "CLOUDFLARE_KV_PREVIEW_ID", "DISTLANG_STORE_BASE_URL", "DISTLANG_HELPERS_MODE", "DISTLANG_SERVICE_TOKEN"}
 
 	fromFile, err := loadEnvFile(envPath)
 	if err != nil {

@@ -55,22 +55,41 @@ func ToScriptWithOptions(filename, source string, opts Options) (Result, error) 
 	}
 
 	var generated []artifacts.Artifact
-	if strings.Contains(source, "distlang/core") {
-		helperSource := helpgen.CoreInMemDB()
+	usesCore := usesDistlangCore(source)
+	usesHelpers := usesDistlangHelpers(source)
+
+	coreSource := helpgen.CoreInMemDB()
+	helpersSource := helpgen.DistlangHelpers()
+	if usesCore || usesHelpers {
 		generated = append(generated, artifacts.Artifact{
 			Path:    filepath.Join("generated", "distlang", "core", "index.js"),
-			Content: []byte(helperSource),
+			Content: []byte(coreSource),
 		})
+	}
+	if usesHelpers {
+		generated = append(generated, artifacts.Artifact{
+			Path:    filepath.Join("generated", "distlang", "index.js"),
+			Content: []byte(helpersSource),
+		})
+	}
 
+	if usesCore || usesHelpers {
 		buildOpts.Plugins = []api.Plugin{{
-			Name: "distlang-core",
+			Name: "distlang-modules",
 			Setup: func(build api.PluginBuild) {
 				build.OnResolve(api.OnResolveOptions{Filter: `^distlang/core$`}, func(args api.OnResolveArgs) (api.OnResolveResult, error) {
 					return api.OnResolveResult{Path: "distlang/core", Namespace: "distlang-core"}, nil
 				})
+				build.OnResolve(api.OnResolveOptions{Filter: `^distlang$`}, func(args api.OnResolveArgs) (api.OnResolveResult, error) {
+					return api.OnResolveResult{Path: "distlang", Namespace: "distlang-helpers"}, nil
+				})
 				build.OnLoad(api.OnLoadOptions{Filter: `.*`, Namespace: "distlang-core"}, func(args api.OnLoadArgs) (api.OnLoadResult, error) {
 					loader := api.LoaderJS
-					return api.OnLoadResult{Contents: &helperSource, Loader: loader}, nil
+					return api.OnLoadResult{Contents: &coreSource, Loader: loader}, nil
+				})
+				build.OnLoad(api.OnLoadOptions{Filter: `.*`, Namespace: "distlang-helpers"}, func(args api.OnLoadArgs) (api.OnLoadResult, error) {
+					loader := api.LoaderJS
+					return api.OnLoadResult{Contents: &helpersSource, Loader: loader}, nil
 				})
 			},
 		}}
@@ -98,8 +117,15 @@ func ToScriptWithOptions(filename, source string, opts Options) (Result, error) 
 	}
 
 	emitted := string(result.OutputFiles[0].Contents)
-	if len(generated) > 0 {
-		wrapped, err := wrapDefaultExport(emitted)
+	wrappers := []string{}
+	if usesCore {
+		wrappers = append(wrappers, "wrapWorkerWithInMemDB")
+	}
+	if usesHelpers {
+		wrappers = append(wrappers, "wrapWorkerWithHelpers")
+	}
+	if len(wrappers) > 0 {
+		wrapped, err := wrapDefaultExport(emitted, wrappers)
 		if err != nil {
 			return Result{}, err
 		}
@@ -111,12 +137,28 @@ func ToScriptWithOptions(filename, source string, opts Options) (Result, error) 
 
 var defaultExportPattern = regexp.MustCompile(`export\s*\{\s*([A-Za-z_$][\w$]*)\s+as\s+default\s*\};?\s*$`)
 
-func wrapDefaultExport(source string) (string, error) {
+func usesDistlangCore(source string) bool {
+	return strings.Contains(source, `from "distlang/core"`) || strings.Contains(source, "from 'distlang/core'")
+}
+
+func usesDistlangHelpers(source string) bool {
+	return strings.Contains(source, `from "distlang"`) || strings.Contains(source, "from 'distlang'")
+}
+
+func wrapDefaultExport(source string, wrappers []string) (string, error) {
 	matches := defaultExportPattern.FindStringSubmatch(source)
 	if len(matches) != 2 {
-		return "", fmt.Errorf("distlang/core requires a default export worker object")
+		return "", fmt.Errorf("distlang helper imports require a default export worker object")
+	}
+	if len(wrappers) == 0 {
+		return source, nil
 	}
 
-	wrapped := defaultExportPattern.ReplaceAllString(source, "const __distlang_wrapped_default__ = wrapWorkerWithInMemDB($1);\nexport { __distlang_wrapped_default__ as default };")
+	expr := matches[1]
+	for _, wrapper := range wrappers {
+		expr = wrapper + "(" + expr + ")"
+	}
+
+	wrapped := defaultExportPattern.ReplaceAllString(source, "const __distlang_wrapped_default__ = "+expr+";\nexport { __distlang_wrapped_default__ as default };")
 	return wrapped, nil
 }

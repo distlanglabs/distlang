@@ -79,3 +79,37 @@ func TestBuildLoginURL(t *testing.T) {
 		t.Fatalf("unexpected login URL: %s", url)
 	}
 }
+
+func TestClientServiceToken(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/auth/service-token" {
+			t.Fatalf("unexpected path: %s", r.URL.Path)
+		}
+		if got := r.Header.Get("Authorization"); got != "Bearer access-token" {
+			t.Fatalf("unexpected auth header: %s", got)
+		}
+		var body map[string]any
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			t.Fatalf("decode body: %v", err)
+		}
+		if body["service"] != "objectdb" {
+			t.Fatalf("unexpected service value: %#v", body["service"])
+		}
+		if body["rotate"] != false {
+			t.Fatalf("unexpected rotate value: %#v", body["rotate"])
+		}
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"access_token": "service-token",
+			"token_type":   "Bearer",
+		})
+	}))
+	defer server.Close()
+
+	result, err := NewClient(server.URL).ServiceToken("access-token", "objectdb", false)
+	if err != nil {
+		t.Fatalf("ServiceToken error: %v", err)
+	}
+	if result.AccessToken != "service-token" {
+		t.Fatalf("unexpected service token response: %+v", result)
+	}
+}

@@ -12,6 +12,8 @@ func TestPackageProducesArtifacts(t *testing.T) {
 		KVBindingName: "DISTLANG_KV",
 		KVNamespaceID: "namespace-123",
 		KVPreviewID:   "preview-456",
+		StoreBaseURL:  "https://api.distlang.com",
+		HelpersMode:   "live",
 	})
 	if err != nil {
 		fatalf(t, "Package error: %v", err)
@@ -32,6 +34,12 @@ func TestPackageProducesArtifacts(t *testing.T) {
 		}
 		if a.Path == "dist/cloudflare/wrangler.toml" && !contains(a.Content, []byte("id = \"namespace-123\"")) {
 			fatalf(t, "wrangler.toml missing kv id: %s", string(a.Content))
+		}
+		if a.Path == "dist/cloudflare/wrangler.toml" && !contains(a.Content, []byte("DISTLANG_STORE_BASE_URL = \"https://api.distlang.com\"")) {
+			fatalf(t, "wrangler.toml missing store base url var: %s", string(a.Content))
+		}
+		if a.Path == "dist/cloudflare/wrangler.toml" && !contains(a.Content, []byte("DISTLANG_HELPERS_MODE = \"live\"")) {
+			fatalf(t, "wrangler.toml missing helpers mode var: %s", string(a.Content))
 		}
 		if a.Path == "dist/cloudflare/Makefile" {
 			if !contains(a.Content, []byte("npm install -g wrangler")) {

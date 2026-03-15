@@ -14,6 +14,8 @@ type Context struct {
 	KVBindingName string
 	KVNamespaceID string
 	KVPreviewID   string
+	StoreBaseURL  string
+	HelpersMode   string
 }
 
 // Package renders Cloudflare provider artifacts from V8 backend output.
@@ -64,6 +66,16 @@ binding = "{{.KVBindingName}}"
 id = "{{.KVNamespaceID}}"
 {{- if .KVPreviewID }}
 preview_id = "{{.KVPreviewID}}"
+{{- end }}
+{{- end }}
+{{- if or .StoreBaseURL .HelpersMode }}
+
+[vars]
+{{- if .StoreBaseURL }}
+DISTLANG_STORE_BASE_URL = "{{.StoreBaseURL}}"
+{{- end }}
+{{- if .HelpersMode }}
+DISTLANG_HELPERS_MODE = "{{.HelpersMode}}"
 {{- end }}
 {{- end }}
 `

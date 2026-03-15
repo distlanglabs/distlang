@@ -57,7 +57,7 @@ func runBuild(args []string) int {
 	fmt.Println("Build succeeded")
 	fmt.Println("- v8: dist/v8/worker.js")
 	fmt.Println("- cloudflare: dist/cloudflare/worker.js, dist/cloudflare/wrangler.toml, dist/cloudflare/Makefile")
-	fmt.Println("- generated helpers: generated/distlang/core/* (when distlang/core is imported)")
+	fmt.Println("- generated helpers: generated/distlang/* (when distlang or distlang/core is imported)")
 
 	return 0
 }
@@ -81,6 +81,8 @@ func cloudflareBuildContext(filePath string) (cloudflareprovider.Context, error)
 
 	ctx.KVNamespaceID = strings.TrimSpace(values["CLOUDFLARE_KV_NAMESPACE_ID"])
 	ctx.KVPreviewID = strings.TrimSpace(values["CLOUDFLARE_KV_PREVIEW_ID"])
+	ctx.StoreBaseURL = strings.TrimSpace(values["DISTLANG_STORE_BASE_URL"])
+	ctx.HelpersMode = strings.TrimSpace(values["DISTLANG_HELPERS_MODE"])
 
 	return ctx, nil
 }

@@ -8,3 +8,10 @@ var coreInMemDB string
 func CoreInMemDB() string {
 	return coreInMemDB
 }
+
+//go:embed distlang/index.js
+var distlangHelpers string
+
+func DistlangHelpers() string {
+	return distlangHelpers
+}

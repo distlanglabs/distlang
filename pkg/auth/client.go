@@ -25,6 +25,12 @@ type WhoAmIResponse struct {
 	} `json:"token"`
 }
 
+type ServiceTokenResponse struct {
+	AccessToken string `json:"access_token"`
+	Token       string `json:"token"`
+	TokenType   string `json:"token_type"`
+}
+
 type Client struct {
 	baseURL    string
 	httpClient *http.Client
@@ -101,6 +107,26 @@ func (c *Client) Logout(refreshToken string) error {
 		return nil
 	}
 	return c.postJSON("/auth/logout", map[string]string{"refresh_token": refreshToken}, &struct{}{}, "")
+}
+
+func (c *Client) ServiceToken(accessToken, service string, rotate bool) (ServiceTokenResponse, error) {
+	if strings.TrimSpace(service) == "" {
+		service = "objectdb"
+	}
+	var response ServiceTokenResponse
+	if err := c.postJSON("/auth/service-token", map[string]any{
+		"service": service,
+		"rotate":  rotate,
+	}, &response, accessToken); err != nil {
+		return ServiceTokenResponse{}, err
+	}
+	if strings.TrimSpace(response.AccessToken) == "" {
+		response.AccessToken = strings.TrimSpace(response.Token)
+	}
+	if strings.TrimSpace(response.AccessToken) == "" {
+		return ServiceTokenResponse{}, fmt.Errorf("auth response missing service token")
+	}
+	return response, nil
 }
 
 func (c *Client) EnsureSession() (Session, error) {
