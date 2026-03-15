@@ -27,7 +27,7 @@ func TestToScriptKeepsESMForV8(t *testing.T) {
 }
 
 func TestToScriptGeneratesVisibleCoreHelper(t *testing.T) {
-	src := `import { ObjectDB } from "distlang/core"; export default { async fetch(request, env, ctx) { return Response.json(await ObjectDB.get("hello")) } }`
+	src := `import { InMemDB } from "distlang/core"; export default { async fetch(request, env, ctx) { return Response.json(await InMemDB.get("hello")) } }`
 
 	res, err := ToScriptWithOptions("index.js", src, Options{Format: FormatV8})
 	if err != nil {
@@ -40,10 +40,10 @@ func TestToScriptGeneratesVisibleCoreHelper(t *testing.T) {
 	if res.Artifacts[0].Path != "generated/distlang/core/index.js" {
 		t.Fatalf("unexpected generated path: %s", res.Artifacts[0].Path)
 	}
-	if !strings.Contains(string(res.Artifacts[0].Content), "export const ObjectDB") {
-		t.Fatalf("generated helper missing ObjectDB export: %s", string(res.Artifacts[0].Content))
+	if !strings.Contains(string(res.Artifacts[0].Content), "export const InMemDB") {
+		t.Fatalf("generated helper missing InMemDB export: %s", string(res.Artifacts[0].Content))
 	}
-	if !strings.Contains(res.Code, "wrapWorkerWithObjectDB") {
+	if !strings.Contains(res.Code, "wrapWorkerWithInMemDB") {
 		t.Fatalf("expected wrapped default export in emitted code: %s", res.Code)
 	}
 	if strings.Contains(res.Code, `from "distlang/core"`) || strings.Contains(res.Code, `from 'distlang/core'`) {

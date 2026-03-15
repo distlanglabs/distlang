@@ -1,19 +1,19 @@
-import { ObjectDB } from "distlang/core";
+import { InMemDB } from "distlang/core";
 
 function sampleValue(key) {
   return {
     key,
-    label: "ObjectDB example",
+    label: "InMemDB example",
     updatedAt: new Date().toISOString(),
-    tags: ["objectdb", "distlang"],
+    tags: ["inmemdb", "distlang"],
   };
 }
 
 function endpointIndex(baseUrl) {
   return {
     ok: true,
-    name: "objectdb example",
-    description: "Query-driven ObjectDB demo with raw JSON responses.",
+    name: "inmemdb example",
+    description: "Query-driven InMemDB demo with raw JSON responses.",
     endpoints: [
       {
         method: "GET",
@@ -93,33 +93,33 @@ export default {
 
     if (request.method === "POST") {
       const value = await requestValue(request, url, key);
-      await ObjectDB.put(key, value);
+      await InMemDB.put(key, value);
       return Response.json({
         ok: true,
         action: "put",
         key,
         value,
-        keys: await ObjectDB.list(),
+        keys: await InMemDB.list(),
         source,
       });
     }
 
     if (request.method === "DELETE") {
-      const deleted = await ObjectDB.delete(key);
+      const deleted = await InMemDB.delete(key);
       return Response.json({
         ok: true,
         action: "delete",
         key,
         deleted,
-        keys: await ObjectDB.list(),
+        keys: await InMemDB.list(),
         source,
       });
     }
 
-    let value = await ObjectDB.get(key);
+    let value = await InMemDB.get(key);
     let seeded = false;
     if (value == null) {
-      value = await ObjectDB.create(key, sampleValue(key));
+      value = await InMemDB.create(key, sampleValue(key));
       seeded = true;
     }
 
@@ -129,7 +129,7 @@ export default {
       key,
       value,
       seeded,
-      keys: await ObjectDB.list(),
+      keys: await InMemDB.list(),
       hint: {
         postQuery: `fetch('/?key=${encodeURIComponent(key)}&value=hello-from-browser', { method: 'POST' })`,
         postJson: `fetch('/?key=${encodeURIComponent(key)}', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ label: 'from browser' }) })`,

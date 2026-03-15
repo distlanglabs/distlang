@@ -57,7 +57,7 @@ async function listKeys(options = {}) {
   return Array.from(memoryStore.keys()).filter((key) => key.startsWith(prefix));
 }
 
-export function wrapWorkerWithObjectDB(worker) {
+export function wrapWorkerWithInMemDB(worker) {
   return {
     ...worker,
     async fetch(request, env, ctx) {
@@ -67,11 +67,11 @@ export function wrapWorkerWithObjectDB(worker) {
   };
 }
 
-export const ObjectDB = {
+export const InMemDB = {
   async create(key, value) {
     const existing = await readValue(key);
     if (existing != null) {
-      throw new Error("ObjectDB.create: key already exists");
+      throw new Error("InMemDB.create: key already exists");
     }
     return writeValue(key, value);
   },

@@ -30,8 +30,8 @@ distlang will need to be split into two
 1. distlang-js
    >> What is current right now. 
    >> Add support for db in the helloWorld program.
-      For Cloudflare add support for KV. So in code they could write import distlang/core and then we will load the code to read the KV and write to KV. 
-      CRUD methods for a generic DB maybe call distland.ObjectDB.<crud>
+      For Cloudflare add support for KV. So in code they could write import distlang/core and then we will load the code to read the KV and write to KV.
+      CRUD methods for a generic DB maybe call distlang.InMemDB.<crud>
       While building it should add the code for the KV Cruds for now. 
    >> Add support for metrics in the helloWorld program.
 2. distlang-wasm

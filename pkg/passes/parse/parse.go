@@ -56,7 +56,7 @@ func ToScriptWithOptions(filename, source string, opts Options) (Result, error) 
 
 	var generated []artifacts.Artifact
 	if strings.Contains(source, "distlang/core") {
-		helperSource := helpgen.CoreObjectDB()
+		helperSource := helpgen.CoreInMemDB()
 		generated = append(generated, artifacts.Artifact{
 			Path:    filepath.Join("generated", "distlang", "core", "index.js"),
 			Content: []byte(helperSource),
@@ -117,6 +117,6 @@ func wrapDefaultExport(source string) (string, error) {
 		return "", fmt.Errorf("distlang/core requires a default export worker object")
 	}
 
-	wrapped := defaultExportPattern.ReplaceAllString(source, "const __distlang_wrapped_default__ = wrapWorkerWithObjectDB($1);\nexport { __distlang_wrapped_default__ as default };")
+	wrapped := defaultExportPattern.ReplaceAllString(source, "const __distlang_wrapped_default__ = wrapWorkerWithInMemDB($1);\nexport { __distlang_wrapped_default__ as default };")
 	return wrapped, nil
 }

@@ -33,4 +33,4 @@ make deploy
 `make` targets automatically build the distlang CLI in the repo root first.
 `make run` expects local `workerd`.
 `make deploy` builds the example, loads `targets/cloudflare/cloudflare.env`, and then runs `make -C dist/cloudflare publish`.
-`make build` also writes visible generated helper code under `generated/distlang/core/index.js` when the example imports `distlang/core`.
+`make build` also writes visible generated helper code under `generated/distlang/core/index.js` when the example imports `distlang/core` and uses `InMemDB`.

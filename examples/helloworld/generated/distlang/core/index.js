@@ -1,91 +1,95 @@
-const __distlangMemoryKV = new Map();
-let __distlangCurrentKV = null;
+const memoryStore = new Map();
+let currentBinding = null;
 
-function __distlangClone(value) {
+function cloneValue(value) {
   if (value == null) {
     return value;
   }
   return JSON.parse(JSON.stringify(value));
 }
 
-function __distlangUseBinding(binding) {
-  __distlangCurrentKV = binding || null;
+function useBinding(binding) {
+  currentBinding = binding || null;
 }
 
-async function __distlangKVGet(key) {
-  if (__distlangCurrentKV && typeof __distlangCurrentKV.get === "function") {
-    const raw = await __distlangCurrentKV.get(key, "text");
+function hasBindingMethod(name) {
+  return currentBinding && typeof currentBinding[name] === "function";
+}
+
+async function readValue(key) {
+  if (hasBindingMethod("get")) {
+    const raw = await currentBinding.get(key, "text");
     if (raw == null) {
       return null;
     }
     return JSON.parse(raw);
   }
-  if (!__distlangMemoryKV.has(key)) {
+  if (!memoryStore.has(key)) {
     return null;
   }
-  return __distlangClone(__distlangMemoryKV.get(key));
+  return cloneValue(memoryStore.get(key));
 }
 
-async function __distlangKVPut(key, value) {
-  if (__distlangCurrentKV && typeof __distlangCurrentKV.put === "function") {
-    await __distlangCurrentKV.put(key, JSON.stringify(value));
-    return __distlangClone(value);
+async function writeValue(key, value) {
+  if (hasBindingMethod("put")) {
+    await currentBinding.put(key, JSON.stringify(value));
+    return cloneValue(value);
   }
-  __distlangMemoryKV.set(key, __distlangClone(value));
-  return __distlangClone(value);
+  memoryStore.set(key, cloneValue(value));
+  return cloneValue(value);
 }
 
-async function __distlangKVDelete(key) {
-  if (__distlangCurrentKV && typeof __distlangCurrentKV.delete === "function") {
-    await __distlangCurrentKV.delete(key);
+async function deleteValue(key) {
+  if (hasBindingMethod("delete")) {
+    await currentBinding.delete(key);
     return true;
   }
-  return __distlangMemoryKV.delete(key);
+  return memoryStore.delete(key);
 }
 
-async function __distlangKVList(options = {}) {
+async function listKeys(options = {}) {
   const prefix = typeof options.prefix === "string" ? options.prefix : "";
-  if (__distlangCurrentKV && typeof __distlangCurrentKV.list === "function") {
-    const result = await __distlangCurrentKV.list({ prefix });
+  if (hasBindingMethod("list")) {
+    const result = await currentBinding.list({ prefix });
     const keys = result && Array.isArray(result.keys) ? result.keys : [];
     return keys.map((entry) => entry.name);
   }
-  return Array.from(__distlangMemoryKV.keys()).filter((key) => key.startsWith(prefix));
+  return Array.from(memoryStore.keys()).filter((key) => key.startsWith(prefix));
 }
 
-globalThis.__distlangWrapDefault = function(worker) {
+export function wrapWorkerWithInMemDB(worker) {
   return {
     ...worker,
     async fetch(request, env, ctx) {
-      __distlangUseBinding(env && env.DISTLANG_KV);
+      useBinding(env && env.DISTLANG_KV);
       return worker.fetch(request, env, ctx);
-    }
+    },
   };
-};
+}
 
-export const ObjectDB = {
+export const InMemDB = {
   async create(key, value) {
-    const existing = await __distlangKVGet(key);
+    const existing = await readValue(key);
     if (existing != null) {
-      throw new Error("ObjectDB.create: key already exists");
+      throw new Error("InMemDB.create: key already exists");
     }
-    return __distlangKVPut(key, value);
+    return writeValue(key, value);
   },
   async get(key) {
-    return __distlangKVGet(key);
+    return readValue(key);
   },
   async put(key, value) {
-    return __distlangKVPut(key, value);
+    return writeValue(key, value);
   },
   async update(key, updater) {
-    const current = await __distlangKVGet(key);
+    const current = await readValue(key);
     const next = typeof updater === "function" ? await updater(current) : updater;
-    return __distlangKVPut(key, next);
+    return writeValue(key, next);
   },
   async delete(key) {
-    return __distlangKVDelete(key);
+    return deleteValue(key);
   },
   async list(options) {
-    return __distlangKVList(options);
-  }
+    return listKeys(options);
+  },
 };

@@ -1,4 +1,4 @@
-# objectdb example
+# inmemdb example
 
 Run commands from this directory.
 
@@ -54,4 +54,4 @@ curl -X DELETE "http://127.0.0.1:5656/?key=myKey"
 `make` targets automatically build the distlang CLI in the repo root first.
 `make run` expects local `workerd`.
 `make deploy` builds the example, loads `targets/cloudflare/cloudflare.env`, and then runs `make -C dist/cloudflare publish`.
-`make build` also writes visible generated helper code under `generated/distlang/core/index.js` when the example imports `distlang/core`.
+`make build` also writes visible generated helper code under `generated/distlang/core/index.js` when the example imports `distlang/core` and uses `InMemDB`.

@@ -1,4 +1,4 @@
-import { ObjectDB } from "distlang/core";
+import { InMemDB } from "distlang/core";
 
 export default {
   async fetch(request, env, ctx) {
@@ -7,16 +7,16 @@ export default {
 
     if (request.method === "POST") {
       const value = {
-        message: "Hello from ObjectDB!",
+        message: "Hello from InMemDB!",
         updatedAt: new Date().toISOString(),
       };
-      await ObjectDB.put(key, value);
+      await InMemDB.put(key, value);
       return Response.json({ ok: true, key, value, source: "write" });
     }
 
-    let value = await ObjectDB.get(key);
+    let value = await InMemDB.get(key);
     if (value == null) {
-      value = await ObjectDB.create(key, {
+      value = await InMemDB.create(key, {
         message: "Hello Worker!",
         seeded: true,
       });
@@ -25,7 +25,7 @@ export default {
     return Response.json({
       key,
       value,
-      keys: await ObjectDB.list({ prefix: "hello/" }),
+      keys: await InMemDB.list({ prefix: "hello/" }),
       source: env && env.DISTLANG_KV ? "cloudflare-kv" : "memory",
     });
   },
