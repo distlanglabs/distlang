@@ -48,7 +48,7 @@ jobs:
           go build -o bin/distlang ./cmd/distlang
 
       - name: Upload CLI artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: distlang-${{ matrix.go-version }}-linux-amd64
           path: bin/distlang

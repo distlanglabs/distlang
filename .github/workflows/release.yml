@@ -29,7 +29,7 @@ jobs:
         run: make checksums
 
       - name: Upload workflow artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: release-assets-${{ github.ref_name }}
           path: dist/release/assets/*
