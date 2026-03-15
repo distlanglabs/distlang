@@ -40,5 +40,6 @@ jobs:
         with:
           files: |
             dist/release/assets/*.tar.gz
+            dist/release/assets/*.zip
             dist/release/assets/checksums.txt
           generate_release_notes: true

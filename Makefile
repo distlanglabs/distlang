@@ -12,7 +12,7 @@ help:
 	@echo "  make run    - run distlang locally"
 	@echo "  make build  - build binary into ./bin"
 	@echo "  make build-cross - cross-compile release binaries"
-	@echo "  make package - package release binaries into tar.gz"
+	@echo "  make package - package release binaries into tar.gz/zip"
 	@echo "  make checksums - generate SHA256 checksums for release assets"
 	@echo "  make release-local - run package + checksums"
 	@echo "  make test   - run tests"
@@ -42,23 +42,33 @@ build-cross:
 
 package: build-cross
 	mkdir -p $(RELEASE_ASSETS)
+	@if ! command -v zip >/dev/null 2>&1; then \
+		echo "zip is required to package Windows release artifacts"; \
+		exit 1; \
+	fi
 	@set -e; \
 	for platform in $(PLATFORMS); do \
 		os=$${platform%/*}; \
 		arch=$${platform#*/}; \
 		ext=""; \
 		if [ "$$os" = "windows" ]; then ext=".exe"; fi; \
-		archive="$(RELEASE_ASSETS)/$(APP)_$${os}_$${arch}.tar.gz"; \
-		echo "Packaging $$archive"; \
-		tar -C "$(RELEASE_BIN_DIR)" -czf "$$archive" "$(APP)_$${os}_$${arch}$$ext"; \
+		if [ "$$os" = "windows" ]; then \
+			archive="$(RELEASE_ASSETS)/$(APP)_$${os}_$${arch}.zip"; \
+			echo "Packaging $$archive"; \
+			(cd "$(RELEASE_BIN_DIR)" && zip -q "../assets/$(APP)_$${os}_$${arch}.zip" "$(APP)_$${os}_$${arch}$$ext"); \
+		else \
+			archive="$(RELEASE_ASSETS)/$(APP)_$${os}_$${arch}.tar.gz"; \
+			echo "Packaging $$archive"; \
+			tar -C "$(RELEASE_BIN_DIR)" -czf "$$archive" "$(APP)_$${os}_$${arch}$$ext"; \
+		fi; \
 	done
 
 checksums: package
 	mkdir -p $(RELEASE_ASSETS)
 	@if command -v sha256sum >/dev/null 2>&1; then \
-		sha256sum $(RELEASE_ASSETS)/*.tar.gz > $(RELEASE_ASSETS)/checksums.txt; \
+		(cd $(RELEASE_ASSETS) && sha256sum *.tar.gz *.zip > checksums.txt); \
 	else \
-		shasum -a 256 $(RELEASE_ASSETS)/*.tar.gz > $(RELEASE_ASSETS)/checksums.txt; \
+		(cd $(RELEASE_ASSETS) && shasum -a 256 *.tar.gz *.zip > checksums.txt); \
 	fi
 
 release-local: checksums

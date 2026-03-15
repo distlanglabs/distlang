@@ -1,5 +1,24 @@
 # distlang
 
+## Install
+
+Linux/macOS:
+```bash
+curl -fsSL https://distlang.com/install | bash
+```
+
+Windows PowerShell:
+```powershell
+irm https://distlang.com/install.ps1 | iex
+```
+
+Verify install:
+```bash
+distlang --help
+```
+
+By default the installer places `distlang` in a user-local bin directory (`~/.local/bin` on Linux/macOS, `%LOCALAPPDATA%\distlang\bin` on Windows).
+
 # Plan
 
 distlang will need to be split into two
@@ -48,7 +67,7 @@ make debug
 - `run <file> [--v8-port=N]`: build the V8 backend, then start local workerd.
 - `debug <build|run> <file> [--passes=...]`: print pass outputs (`parse`, `ir`, `emit`); `debug run` now points you to `distlang run`.
 
-## Artifact Downloads
+## Releases and CI Artifacts
 
 ### Release assets (public + stable)
 Tagging a release (for example `v0.1.0`) triggers `.github/workflows/release.yml` and publishes cross-platform binaries to GitHub Releases.
@@ -68,6 +87,8 @@ VERSION=v0.1.0
 curl -fsSL -o distlang_darwin_arm64.tar.gz \
   "https://github.com/distlanglabs/distlang/releases/download/${VERSION}/distlang_darwin_arm64.tar.gz"
 ```
+
+Windows release assets are published as `.zip` files (for example `distlang_windows_amd64.zip`).
 
 Verify checksums:
 ```bash
