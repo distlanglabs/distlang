@@ -166,23 +166,16 @@ func (c *Client) CreateBucket(accessToken, bucket string) (CreateBucketResponse,
 }
 
 func (c *Client) BucketExists(accessToken, bucket string) (bool, error) {
-	req, err := http.NewRequest(http.MethodHead, c.baseURL+objectDBBucketPath(bucket), nil)
+	response, err := c.ListBuckets(accessToken)
 	if err != nil {
 		return false, err
 	}
-	req.Header.Set("Authorization", "Bearer "+accessToken)
-	res, err := c.httpClient.Do(req)
-	if err != nil {
-		return false, err
+	for _, item := range response.Buckets {
+		if item.Name == bucket {
+			return true, nil
+		}
 	}
-	defer res.Body.Close()
-	if res.StatusCode == http.StatusOK {
-		return true, nil
-	}
-	if res.StatusCode == http.StatusNotFound {
-		return false, nil
-	}
-	return false, decodeErrorResponse(res)
+	return false, nil
 }
 
 func (c *Client) DeleteBucket(accessToken, bucket string) (DeleteResponse, error) {
@@ -259,24 +252,26 @@ func (c *Client) GetValue(accessToken, bucket, key, responseType string) (GetVal
 }
 
 func (c *Client) HeadValue(accessToken, bucket, key string) (HeadValueResponse, error) {
-	req, err := http.NewRequest(http.MethodHead, c.baseURL+objectDBValuePath(bucket, key), nil)
+	result, err := c.ListKeys(accessToken, bucket, ListKeysOptions{Prefix: key, Limit: 1000})
 	if err != nil {
 		return HeadValueResponse{}, err
 	}
-	req.Header.Set("Authorization", "Bearer "+accessToken)
-	res, err := c.httpClient.Do(req)
-	if err != nil {
-		return HeadValueResponse{}, err
+	for _, item := range result.Keys {
+		if item.Name != key || item.Metadata == nil {
+			continue
+		}
+		return HeadValueResponse{
+			ContentType: item.Metadata.ContentType,
+			ContentSize: strconv.FormatInt(item.Metadata.Size, 10),
+			UpdatedAt:   item.Metadata.UpdatedAt,
+		}, nil
 	}
-	defer res.Body.Close()
-	if res.StatusCode < 200 || res.StatusCode >= 300 {
-		return HeadValueResponse{}, decodeErrorResponse(res)
+	return HeadValueResponse{}, &APIError{
+		StatusCode: http.StatusNotFound,
+		Status:     http.StatusText(http.StatusNotFound),
+		Code:       "key_not_found",
+		Message:    "No value exists for that key.",
 	}
-	return HeadValueResponse{
-		ContentType: res.Header.Get("Content-Type"),
-		ContentSize: res.Header.Get("Content-Length"),
-		UpdatedAt:   res.Header.Get("X-Distlang-Updated-At"),
-	}, nil
 }
 
 func (c *Client) DeleteValue(accessToken, bucket, key string) (DeleteResponse, error) {
