@@ -16,10 +16,10 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Setup Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@v6
         with:
           go-version: ${{ matrix.go-version }}
           cache: true
@@ -43,4 +43,13 @@ jobs:
         run: go test ./...
 
       - name: Build CLI
-        run: go build ./cmd/distlang
+        run: |
+          mkdir -p bin
+          go build -o bin/distlang ./cmd/distlang
+
+      - name: Upload CLI artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: distlang-${{ matrix.go-version }}-linux-amd64
+          path: bin/distlang
+          retention-days: 14

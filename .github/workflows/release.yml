@@ -1,0 +1,44 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Setup Go
+        uses: actions/setup-go@v6
+        with:
+          go-version: "1.21.x"
+          cache: true
+
+      - name: Download modules
+        run: go mod download
+
+      - name: Build release assets
+        run: make checksums
+
+      - name: Upload workflow artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-assets-${{ github.ref_name }}
+          path: dist/release/assets/*
+          retention-days: 14
+
+      - name: Publish GitHub release assets
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            dist/release/assets/*.tar.gz
+            dist/release/assets/checksums.txt
+          generate_release_notes: true

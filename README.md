@@ -48,6 +48,68 @@ make debug
 - `run <file> [--v8-port=N]`: build the V8 backend, then start local workerd.
 - `debug <build|run> <file> [--passes=...]`: print pass outputs (`parse`, `ir`, `emit`); `debug run` now points you to `distlang run`.
 
+## Artifact Downloads
+
+### Release assets (public + stable)
+Tagging a release (for example `v0.1.0`) triggers `.github/workflows/release.yml` and publishes cross-platform binaries to GitHub Releases.
+
+Download the latest Linux AMD64 build:
+```bash
+curl -fsSL -o distlang_linux_amd64.tar.gz \
+  https://github.com/distlanglabs/distlang/releases/latest/download/distlang_linux_amd64.tar.gz
+tar -xzf distlang_linux_amd64.tar.gz
+chmod +x distlang_linux_amd64
+./distlang_linux_amd64 --help
+```
+
+Download a pinned version:
+```bash
+VERSION=v0.1.0
+curl -fsSL -o distlang_darwin_arm64.tar.gz \
+  "https://github.com/distlanglabs/distlang/releases/download/${VERSION}/distlang_darwin_arm64.tar.gz"
+```
+
+Verify checksums:
+```bash
+curl -fsSL -o checksums.txt \
+  https://github.com/distlanglabs/distlang/releases/latest/download/checksums.txt
+grep 'distlang_linux_amd64.tar.gz' checksums.txt | sha256sum -c -
+```
+
+### CI workflow artifacts (short-lived)
+Every run of `.github/workflows/ci.yml` uploads a Linux AMD64 CLI artifact per Go version. These artifacts are for CI/debug usage and expire automatically.
+
+From the GitHub UI:
+1. Open the workflow run.
+2. Download from the **Artifacts** section at the bottom.
+
+From GitHub CLI:
+```bash
+# list recent runs
+gh run list --workflow ci.yml
+
+# download artifacts from a specific run id
+gh run download <run-id>
+```
+
+### Maintainer release flow
+```bash
+# 1) create and push a tag
+git tag v0.1.0
+git push origin v0.1.0
+
+# 2) release workflow builds and publishes assets
+#    - distlang_<os>_<arch>.tar.gz
+#    - checksums.txt
+```
+
+Local release asset build commands:
+```bash
+make build-cross
+make package
+make checksums
+```
+
 ## Helper Auth
 - `distlang helpers login`: opens the browser for Google auth and stores a local session.
 - `distlang helpers store objectdb status`: confirms store access for the logged-in user.

@@ -27,6 +27,7 @@ go.work.sum
 
 # env file
 .env
+.wrangler/
 examples/**/dist/
 examples/**/.env
 examples/**/.env.*
