@@ -53,3 +53,24 @@ jobs:
           name: distlang-${{ matrix.go-version }}-linux-amd64
           path: bin/distlang
           retention-days: 14
+
+  runtime-smoke:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Setup Go
+        uses: actions/setup-go@v6
+        with:
+          go-version: "stable"
+          cache: true
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Run helpers runtime smoke tests
+        run: node test/runtime/helpers_objectdb_smoke.mjs

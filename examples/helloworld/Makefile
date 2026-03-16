@@ -18,9 +18,12 @@ cli:
 	@$(MAKE) -C $(ROOT) build
 
 deps:
-	@command -v workerd >/dev/null 2>&1 && echo "workerd already installed" && exit 0 || true
-	@command -v npm >/dev/null 2>&1 || (echo "npm not installed; required to install workerd" && exit 1)
-	@npm install -g workerd
+	@if command -v workerd >/dev/null 2>&1; then \
+		echo "workerd already installed"; \
+	else \
+		command -v npm >/dev/null 2>&1 || (echo "npm not installed; required to install workerd" && exit 1); \
+		npm install -g workerd; \
+	fi
 
 cloudflare-init: cli
 	@$(MAKE) -f Makefile.Cloudflare init
