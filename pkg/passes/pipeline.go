@@ -17,6 +17,7 @@ type Result struct {
 	IR          *ir.IR
 	Emitted     string
 	Artifacts   []artifacts.Artifact
+	UsesLayers  bool
 }
 
 // Options controls pipeline execution.
@@ -41,6 +42,7 @@ func Execute(filePath string, opts Options) (Result, error) {
 	}
 	res.Transformed = parsed.Code
 	res.Artifacts = parsed.Artifacts
+	res.UsesLayers = parsed.UsesLayers
 
 	if opts.NeedIR {
 		built, err := ir.Build(filePath, parsed.Code)

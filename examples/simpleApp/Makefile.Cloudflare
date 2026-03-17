@@ -1,0 +1,27 @@
+DISTLANG := ../../bin/distlang
+
+.PHONY: init deps dev dev-set1 dev-set2 deploy
+
+init:
+	@$(MAKE) -f Makefile cli
+	$(DISTLANG) target init --target=cloudflare --path=.
+
+deps:
+	@$(MAKE) -f Makefile build
+	$(MAKE) -C dist/cloudflare/handlerSet1 deps
+	$(MAKE) -C dist/cloudflare/handlerSet2 deps
+
+dev: dev-set1
+
+dev-set1:
+	@$(MAKE) -f Makefile build
+	$(MAKE) -C dist/cloudflare/handlerSet1 run
+
+dev-set2:
+	@$(MAKE) -f Makefile build
+	$(MAKE) -C dist/cloudflare/handlerSet2 run
+
+deploy:
+	@$(MAKE) -f Makefile build
+	@test -f targets/cloudflare/cloudflare.env || (echo "missing targets/cloudflare/cloudflare.env; run 'make cloudflare-init' first" && exit 1)
+	$(DISTLANG) deploy index.js --target=cloudflare

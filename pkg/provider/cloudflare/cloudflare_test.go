@@ -66,6 +66,45 @@ func TestPackageProducesArtifacts(t *testing.T) {
 	}
 }
 
+func TestPackageProducesDualArtifactsForSimpleApp(t *testing.T) {
+	artifacts, err := Package(v8backend.Output{Workers: []v8backend.WorkerOutput{
+		{Name: "handlerSet1", Emitted: "console.log('one')"},
+		{Name: "handlerSet2", Emitted: "console.log('two')"},
+	}}, Context{ProjectName: "simpleApp"})
+	if err != nil {
+		fatalf(t, "Package error: %v", err)
+	}
+
+	if len(artifacts) != 6 {
+		fatalf(t, "expected 6 artifacts, got %d", len(artifacts))
+	}
+
+	found := map[string]bool{}
+	for _, a := range artifacts {
+		found[a.Path] = true
+		if a.Path == "dist/cloudflare/handlerSet1/wrangler.toml" && !contains(a.Content, []byte("name = \"simpleapp-handlerset1\"")) {
+			fatalf(t, "handlerSet1 wrangler.toml missing project name: %s", string(a.Content))
+		}
+		if a.Path == "dist/cloudflare/handlerSet2/wrangler.toml" && !contains(a.Content, []byte("name = \"simpleapp-handlerset2\"")) {
+			fatalf(t, "handlerSet2 wrangler.toml missing project name: %s", string(a.Content))
+		}
+	}
+
+	expected := []string{
+		"dist/cloudflare/handlerSet1/worker.js",
+		"dist/cloudflare/handlerSet1/wrangler.toml",
+		"dist/cloudflare/handlerSet1/Makefile",
+		"dist/cloudflare/handlerSet2/worker.js",
+		"dist/cloudflare/handlerSet2/wrangler.toml",
+		"dist/cloudflare/handlerSet2/Makefile",
+	}
+	for _, path := range expected {
+		if !found[path] {
+			fatalf(t, "missing artifact %s", path)
+		}
+	}
+}
+
 func fatalf(t *testing.T, format string, args ...any) {
 	t.Helper()
 	t.Fatalf(format, args...)

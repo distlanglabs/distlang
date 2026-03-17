@@ -116,6 +116,14 @@ func runDeploy(args []string) int {
 		return 1
 	}
 
+	deployDirs := []string{filepath.Join("dist", "cloudflare")}
+	if len(v8Out.Workers) > 0 {
+		deployDirs = deployDirs[:0]
+		for _, worker := range v8Out.Workers {
+			deployDirs = append(deployDirs, filepath.Join("dist", "cloudflare", worker.Name))
+		}
+	}
+
 	if _, err := exec.LookPath("wrangler"); err != nil {
 		fmt.Fprintln(os.Stderr, "deploy failed: wrangler not found in PATH")
 		fmt.Fprintln(os.Stderr, "install it with: npm install -g wrangler")
@@ -123,23 +131,27 @@ func runDeploy(args []string) int {
 	}
 
 	if usesHelpers {
-		if err := putWranglerSecret(filepath.Join("dist", "cloudflare"), deployEnv, "DISTLANG_SERVICE_TOKEN", serviceToken); err != nil {
-			fmt.Fprintf(os.Stderr, "deploy failed: %v\n", err)
-			return 1
+		for _, deployDir := range deployDirs {
+			if err := putWranglerSecret(deployDir, deployEnv, "DISTLANG_SERVICE_TOKEN", serviceToken); err != nil {
+				fmt.Fprintf(os.Stderr, "deploy failed: %v\n", err)
+				return 1
+			}
 		}
 	}
 
-	fmt.Println("Deploying to Cloudflare...")
-	cmd := exec.Command("wrangler", "deploy")
-	cmd.Dir = filepath.Join("dist", "cloudflare")
-	cmd.Stdin = os.Stdin
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-	cmd.Env = mergedEnv(deployEnv)
+	for _, deployDir := range deployDirs {
+		fmt.Printf("Deploying to Cloudflare (%s)...\n", deployDir)
+		cmd := exec.Command("wrangler", "deploy")
+		cmd.Dir = deployDir
+		cmd.Stdin = os.Stdin
+		cmd.Stdout = os.Stdout
+		cmd.Stderr = os.Stderr
+		cmd.Env = mergedEnv(deployEnv)
 
-	if err := cmd.Run(); err != nil {
-		fmt.Fprintf(os.Stderr, "deploy failed: %v\n", err)
-		return 1
+		if err := cmd.Run(); err != nil {
+			fmt.Fprintf(os.Stderr, "deploy failed: %v\n", err)
+			return 1
+		}
 	}
 
 	return 0

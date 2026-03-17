@@ -79,6 +79,31 @@ func TestToScriptGeneratesDistlangHelpersModule(t *testing.T) {
 	}
 }
 
+func TestToScriptGeneratesLayersModule(t *testing.T) {
+	src := `import { simpleApp } from "distlang/layers"; const handlerSet1 = { routes: { GET: { "/": async ({ req, db }) => new Response("one") } } }; const handlerSet2 = { routes: { GET: { "/": async ({ req, db }) => new Response("two") } } }; export default simpleApp.instantiate(handlerSet1, handlerSet2, { get: async () => null, put: async () => null });`
+
+	res, err := ToScriptWithOptions("index.js", src, Options{Format: FormatV8})
+	if err != nil {
+		t.Fatalf("ToScriptWithOptions error: %v", err)
+	}
+
+	if len(res.Artifacts) != 1 {
+		t.Fatalf("expected 1 generated artifact, got %d", len(res.Artifacts))
+	}
+	if res.Artifacts[0].Path != "generated/distlang/layers/index.js" {
+		t.Fatalf("unexpected generated path: %s", res.Artifacts[0].Path)
+	}
+	if !strings.Contains(string(res.Artifacts[0].Content), "export const simpleApp") {
+		t.Fatalf("generated helper missing simpleApp export: %s", string(res.Artifacts[0].Content))
+	}
+	if !res.UsesLayers {
+		t.Fatalf("expected UsesLayers to be true")
+	}
+	if strings.Contains(res.Code, `from "distlang/layers"`) || strings.Contains(res.Code, "from 'distlang/layers'") {
+		t.Fatalf("expected distlang/layers module to be bundled away: %s", res.Code)
+	}
+}
+
 func TestToScriptChainsDistlangWrappers(t *testing.T) {
 	src := `import { InMemDB } from "distlang/core"; import { helpers } from "distlang"; export default { async fetch(request) { await InMemDB.put("a", 1); return Response.json(await helpers.ObjectDB.status()) } }`
 

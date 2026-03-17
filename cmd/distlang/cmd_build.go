@@ -55,9 +55,14 @@ func runBuild(args []string) int {
 	}
 
 	fmt.Println("Build succeeded")
-	fmt.Println("- v8: dist/v8/worker.js")
-	fmt.Println("- cloudflare: dist/cloudflare/worker.js, dist/cloudflare/wrangler.toml, dist/cloudflare/Makefile")
-	fmt.Println("- generated helpers: generated/distlang/* (when distlang or distlang/core is imported)")
+	if len(v8Out.Workers) > 0 {
+		fmt.Println("- v8: dist/v8/handlerSet1/worker.js, dist/v8/handlerSet2/worker.js")
+		fmt.Println("- cloudflare: dist/cloudflare/handlerSet1/*, dist/cloudflare/handlerSet2/*")
+	} else {
+		fmt.Println("- v8: dist/v8/worker.js")
+		fmt.Println("- cloudflare: dist/cloudflare/worker.js, dist/cloudflare/wrangler.toml, dist/cloudflare/Makefile")
+	}
+	fmt.Println("- generated helpers: generated/distlang/* (when distlang, distlang/core, or distlang/layers is imported)")
 
 	return 0
 }

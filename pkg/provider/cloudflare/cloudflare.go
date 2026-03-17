@@ -2,6 +2,7 @@ package cloudflare
 
 import (
 	"bytes"
+	"strings"
 	"text/template"
 
 	"github.com/distlanglabs/distlang/pkg/artifacts"
@@ -24,6 +25,34 @@ func Package(out v8backend.Output, ctx Context) ([]artifacts.Artifact, error) {
 		ctx.KVBindingName = "DISTLANG_KV"
 	}
 
+	if len(out.Workers) > 0 {
+		items := []artifacts.Artifact{}
+		for _, worker := range out.Workers {
+			workerProject := sanitizeProjectName(ctx.ProjectName + "-" + worker.Name)
+			workerItems, err := packageSingleWorker(worker.Emitted, "dist/cloudflare/"+worker.Name, Context{
+				ProjectName:   workerProject,
+				KVBindingName: ctx.KVBindingName,
+				KVNamespaceID: ctx.KVNamespaceID,
+				KVPreviewID:   ctx.KVPreviewID,
+				StoreBaseURL:  ctx.StoreBaseURL,
+				HelpersMode:   ctx.HelpersMode,
+			})
+			if err != nil {
+				return nil, err
+			}
+			items = append(items, workerItems...)
+		}
+		return items, nil
+	}
+
+	return packageSingleWorker(out.Emitted, "dist/cloudflare", ctx)
+}
+
+func packageSingleWorker(emitted string, basePath string, ctx Context) ([]artifacts.Artifact, error) {
+	if ctx.ProjectName == "" {
+		ctx.ProjectName = "distlang-worker"
+	}
+
 	wrangler, err := renderTemplate(wranglerTomlTmpl, ctx)
 	if err != nil {
 		return nil, err
@@ -35,12 +64,39 @@ func Package(out v8backend.Output, ctx Context) ([]artifacts.Artifact, error) {
 	}
 
 	items := []artifacts.Artifact{
-		{Path: "dist/cloudflare/worker.js", Content: []byte(out.Emitted)},
-		{Path: "dist/cloudflare/wrangler.toml", Content: []byte(wrangler)},
-		{Path: "dist/cloudflare/Makefile", Content: []byte(makefile)},
+		{Path: basePath + "/worker.js", Content: []byte(emitted)},
+		{Path: basePath + "/wrangler.toml", Content: []byte(wrangler)},
+		{Path: basePath + "/Makefile", Content: []byte(makefile)},
 	}
 
 	return items, nil
+}
+
+func sanitizeProjectName(value string) string {
+	trimmed := strings.TrimSpace(strings.ToLower(value))
+	if trimmed == "" {
+		return "distlang-worker"
+	}
+
+	var b strings.Builder
+	b.Grow(len(trimmed))
+	prevDash := false
+	for _, ch := range trimmed {
+		if (ch >= 'a' && ch <= 'z') || (ch >= '0' && ch <= '9') {
+			b.WriteRune(ch)
+			prevDash = false
+			continue
+		}
+		if !prevDash {
+			b.WriteRune('-')
+			prevDash = true
+		}
+	}
+	out := strings.Trim(b.String(), "-")
+	if out == "" {
+		return "distlang-worker"
+	}
+	return out
 }
 
 func renderTemplate(src string, data any) (string, error) {

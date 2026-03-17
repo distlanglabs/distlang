@@ -15,3 +15,10 @@ var distlangHelpers string
 func DistlangHelpers() string {
 	return distlangHelpers
 }
+
+//go:embed layers/simpleapp.js
+var layersSimpleApp string
+
+func LayersSimpleApp() string {
+	return layersSimpleApp
+}

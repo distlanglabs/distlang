@@ -13,7 +13,7 @@ var commands = []commandInfo{
 	{Name: "target", Description: "Manage target setup scaffolding", Usage: "distlang target <subcommand>"},
 	{Name: "deploy", Description: "Deploy a backend through a provider", Usage: "distlang deploy <file> [--target=cloudflare]"},
 	{Name: "helpers", Description: "Manage Distlang helper auth session and store access", Usage: "distlang helpers <login|store|whoami|logout>"},
-	{Name: "run", Description: "Run the local V8 runtime", Usage: "distlang run <file> [--v8-port=N]"},
+	{Name: "run", Description: "Run the local V8 runtime", Usage: "distlang run <file> [--v8-port=N] [--set=all|handlerSet1|handlerSet2] [--port1=N] [--port2=N]"},
 	{Name: "debug", Description: "Inspect compiler passes for build or run", Usage: "distlang debug <build|run> <file> [--passes=parse,ir,emit]"},
 	{Name: "help", Description: "Show help for distlang", Usage: "distlang help"},
 }
@@ -78,7 +78,8 @@ func commandHelpBuild() {
 	fmt.Println("build - Build backend artifacts and provider packages")
 	fmt.Println("Usage: distlang build <file>")
 	fmt.Println("Outputs:")
-	fmt.Println("  - dist/v8/* backend artifacts")
+	fmt.Println("  - dist/v8/worker.js for single-worker apps")
+	fmt.Println("  - dist/v8/handlerSet1/worker.js and dist/v8/handlerSet2/worker.js for simpleApp")
 	fmt.Println("  - dist/cloudflare/* provider package from V8 output")
 }
 
@@ -216,11 +217,14 @@ func commandHelpTargetInit() {
 
 func commandHelpRun() {
 	fmt.Println("run - Run the local V8 runtime")
-	fmt.Println("Usage: distlang run <file> [--v8-port=N]")
+	fmt.Println("Usage: distlang run <file> [--v8-port=N] [--set=all|handlerSet1|handlerSet2] [--port1=N] [--port2=N]")
 	fmt.Println("Options:")
-	fmt.Println("  --v8-port=N     Port for local workerd (default: 5656)")
+	fmt.Println("  --v8-port=N     Port for local workerd (default: 5656, single-worker apps)")
+	fmt.Println("  --set=...       Select simpleApp runtime set (default: all)")
+	fmt.Println("  --port1=N       Port for handlerSet1 when running simpleApp (default: 5656)")
+	fmt.Println("  --port2=N       Port for handlerSet2 when running simpleApp (default: 5657)")
 	fmt.Println("Notes:")
-	fmt.Println("  run builds the V8 backend first, then launches workerd.")
+	fmt.Println("  run builds the V8 backend first, then launches workerd instances.")
 }
 
 func commandHelpDebug() {
