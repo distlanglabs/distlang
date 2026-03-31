@@ -16,6 +16,16 @@ import (
 type Client struct {
 	baseURL    string
 	httpClient *http.Client
+	Analytics  *AnalyticsClient
+}
+
+type AnalyticsClient struct {
+	client  *Client
+	Buckets *AnalyticsBucketsClient
+}
+
+type AnalyticsBucketsClient struct {
+	client *AnalyticsClient
 }
 
 type APIError struct {
@@ -124,17 +134,72 @@ type ListKeysOptions struct {
 	Cursor string
 }
 
+type AnalyticsServiceIndex struct {
+	OK      bool   `json:"ok"`
+	Service string `json:"service"`
+	Version string `json:"version"`
+	User    struct {
+		ID    string `json:"id"`
+		Email string `json:"email"`
+		Name  string `json:"name"`
+	} `json:"user"`
+	Limits struct {
+		MaxRowsPerWrite int `json:"maxRowsPerWrite"`
+		MaxQueryLimit   int `json:"maxQueryLimit"`
+	} `json:"limits"`
+	Routes struct {
+		Buckets string `json:"buckets"`
+		Rows    string `json:"rows"`
+		Query   string `json:"query"`
+	} `json:"routes"`
+}
+
+type AnalyticsCreateBucketResponse struct {
+	OK      bool   `json:"ok"`
+	Bucket  string `json:"bucket"`
+	Created bool   `json:"created"`
+}
+
+type AnalyticsPutResponse struct {
+	OK      bool   `json:"ok"`
+	Bucket  string `json:"bucket"`
+	Written int    `json:"written"`
+}
+
+type AnalyticsRow struct {
+	TS   string `json:"ts"`
+	Data any    `json:"data"`
+}
+
+type AnalyticsQueryOptions struct {
+	From   string
+	To     string
+	Limit  int
+	Cursor string
+}
+
+type AnalyticsQueryResponse struct {
+	OK         bool           `json:"ok"`
+	Bucket     string         `json:"bucket"`
+	Rows       []AnalyticsRow `json:"rows"`
+	NextCursor string         `json:"next_cursor"`
+}
+
 func NewClient(baseURL string) *Client {
 	baseURL = strings.TrimRight(strings.TrimSpace(baseURL), "/")
 	if baseURL == "" {
 		baseURL = ResolveBaseURL()
 	}
-	return &Client{
+	client := &Client{
 		baseURL: baseURL,
 		httpClient: &http.Client{
 			Timeout: 30 * time.Second,
 		},
 	}
+	analytics := &AnalyticsClient{client: client}
+	analytics.Buckets = &AnalyticsBucketsClient{client: analytics}
+	client.Analytics = analytics
+	return client
 }
 
 func (c *Client) BaseURL() string {
@@ -282,6 +347,69 @@ func (c *Client) DeleteValue(accessToken, bucket, key string) (DeleteResponse, e
 	return response, nil
 }
 
+func (a *AnalyticsClient) Status(accessToken string) (AnalyticsServiceIndex, error) {
+	var response AnalyticsServiceIndex
+	if err := a.client.getJSON("/analyticsdb/v1", &response, accessToken); err != nil {
+		return AnalyticsServiceIndex{}, err
+	}
+	return response, nil
+}
+
+func (b *AnalyticsBucketsClient) Create(accessToken, bucket string) (AnalyticsCreateBucketResponse, error) {
+	var response AnalyticsCreateBucketResponse
+	if err := b.client.client.doJSON(http.MethodPut, analyticsBucketPath(bucket), nil, &response, accessToken, ""); err != nil {
+		return AnalyticsCreateBucketResponse{}, err
+	}
+	return response, nil
+}
+
+func (a *AnalyticsClient) Put(accessToken, bucket string, data any) (AnalyticsPutResponse, error) {
+	return a.PutAt(accessToken, bucket, time.Now().UTC(), data)
+}
+
+func (a *AnalyticsClient) PutAt(accessToken, bucket string, ts time.Time, data any) (AnalyticsPutResponse, error) {
+	payload, err := json.Marshal(map[string]any{
+		"rows": []map[string]any{{
+			"ts":   ts.UTC().Format(time.RFC3339Nano),
+			"data": data,
+		}},
+	})
+	if err != nil {
+		return AnalyticsPutResponse{}, fmt.Errorf("encode analytics row: %w", err)
+	}
+
+	var response AnalyticsPutResponse
+	if err := a.client.doJSON(http.MethodPost, analyticsRowsPath(bucket), payload, &response, accessToken, "application/json"); err != nil {
+		return AnalyticsPutResponse{}, err
+	}
+	return response, nil
+}
+
+func (a *AnalyticsClient) Query(accessToken, bucket string, opts AnalyticsQueryOptions) (AnalyticsQueryResponse, error) {
+	query := url.Values{}
+	query.Set("from", strings.TrimSpace(opts.From))
+	query.Set("to", strings.TrimSpace(opts.To))
+	if opts.Limit > 0 {
+		query.Set("limit", strconv.Itoa(opts.Limit))
+	}
+	if strings.TrimSpace(opts.Cursor) != "" {
+		query.Set("cursor", opts.Cursor)
+	}
+
+	requestPath := analyticsRowsPath(bucket) + "?" + query.Encode()
+	var response AnalyticsQueryResponse
+	if err := a.client.getJSON(requestPath, &response, accessToken); err != nil {
+		return AnalyticsQueryResponse{}, err
+	}
+	return response, nil
+}
+
+func (a *AnalyticsClient) DefaultBucket(appID, env string) string {
+	appPart := normalizeBucketPart(appID, "app")
+	envPart := normalizeBucketPart(env, "env")
+	return trimBucketLength("app_" + appPart + "__" + envPart)
+}
+
 func objectDBBucketPath(bucket string) string {
 	return path.Join("/objectdb/v1/buckets", url.PathEscape(strings.TrimSpace(bucket)))
 }
@@ -292,6 +420,14 @@ func objectDBKeysPath(bucket string) string {
 
 func objectDBValuePath(bucket, key string) string {
 	return path.Join("/objectdb/v1/buckets", url.PathEscape(strings.TrimSpace(bucket)), "values") + "/" + url.PathEscape(key)
+}
+
+func analyticsBucketPath(bucket string) string {
+	return path.Join("/analyticsdb/v1/buckets", url.PathEscape(strings.TrimSpace(bucket)))
+}
+
+func analyticsRowsPath(bucket string) string {
+	return path.Join("/analyticsdb/v1/buckets", url.PathEscape(strings.TrimSpace(bucket)), "rows")
 }
 
 func (c *Client) getJSON(requestPath string, out any, accessToken string) error {
@@ -365,4 +501,49 @@ func decodeErrorResponse(res *http.Response) error {
 		message = res.Status
 	}
 	return &APIError{StatusCode: res.StatusCode, Status: res.Status, Message: message}
+}
+
+func normalizeBucketPart(value, fallback string) string {
+	value = strings.ToLower(strings.TrimSpace(value))
+	if value == "" {
+		return fallback
+	}
+	var b strings.Builder
+	lastUnderscore := false
+	for _, r := range value {
+		switch {
+		case r >= 'a' && r <= 'z', r >= '0' && r <= '9':
+			b.WriteRune(r)
+			lastUnderscore = false
+		case r == '_' || r == '-':
+			if b.Len() == 0 || lastUnderscore {
+				continue
+			}
+			b.WriteByte('_')
+			lastUnderscore = true
+		default:
+			if b.Len() == 0 || lastUnderscore {
+				continue
+			}
+			b.WriteByte('_')
+			lastUnderscore = true
+		}
+	}
+	result := strings.Trim(b.String(), "_")
+	if result == "" {
+		return fallback
+	}
+	return result
+}
+
+func trimBucketLength(value string) string {
+	if len(value) <= 64 {
+		return value
+	}
+	trimmed := value[:64]
+	trimmed = strings.Trim(trimmed, "_")
+	if trimmed == "" {
+		return "analytics_bucket"
+	}
+	return trimmed
 }
