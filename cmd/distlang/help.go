@@ -12,7 +12,7 @@ var commands = []commandInfo{
 	{Name: "build", Description: "Build backend artifacts and provider packages", Usage: "distlang build <file>"},
 	{Name: "target", Description: "Manage target setup scaffolding", Usage: "distlang target <subcommand>"},
 	{Name: "deploy", Description: "Deploy a backend through a provider", Usage: "distlang deploy <file> [--target=cloudflare]"},
-	{Name: "helpers", Description: "Manage Distlang helper auth session and store access", Usage: "distlang helpers <login|store|whoami|logout>"},
+	{Name: "helpers", Description: "Manage Distlang helper auth session and store access", Usage: "distlang helpers <login|serve|store|whoami|logout>"},
 	{Name: "run", Description: "Run the local V8 runtime", Usage: "distlang run <file> [--v8-port=N] [--set=all|handlerSet1|handlerSet2] [--port1=N] [--port2=N]"},
 	{Name: "debug", Description: "Inspect compiler passes for build or run", Usage: "distlang debug <build|run> <file> [--passes=parse,ir,emit]"},
 	{Name: "help", Description: "Show help for distlang", Usage: "distlang help"},
@@ -100,9 +100,10 @@ func commandHelpTarget() {
 
 func commandHelpHelpers() {
 	fmt.Println("helpers - Manage Distlang helper auth session and store access")
-	fmt.Println("Usage: distlang helpers <login|store|whoami|logout>")
+	fmt.Println("Usage: distlang helpers <login|serve|store|whoami|logout>")
 	fmt.Println("Subcommands:")
 	fmt.Println("  login    Start browser-based login against Distlang auth")
+	fmt.Println("  serve    Run the local helper mock server")
 	fmt.Println("  store    Access authenticated helper store services")
 	fmt.Println("  whoami   Show the current helper auth user")
 	fmt.Println("  logout   Revoke local helper auth session")
@@ -191,6 +192,15 @@ func commandHelpHelpersLogin() {
 	fmt.Println("Notes:")
 	fmt.Println("  Opens the browser to Google login, then listens on http://127.0.0.1:8976/callback")
 	fmt.Println("  Stores the resulting session in your user config directory")
+}
+
+func commandHelpHelpersServe() {
+	fmt.Println("helpers serve - Run the local helper mock server")
+	fmt.Println("Usage: distlang helpers serve [--mock] [--host=127.0.0.1] [--port=9191]")
+	fmt.Println("Options:")
+	fmt.Println("  --mock         Run the built-in mock helper server (default)")
+	fmt.Println("  --host=HOST    Host interface to bind (default: 127.0.0.1)")
+	fmt.Println("  --port=PORT    TCP port to bind (default: 9191)")
 }
 
 func commandHelpHelpersWhoami() {
