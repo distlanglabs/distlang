@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"path/filepath"
 	"regexp"
+	"sort"
 	"strings"
 
 	"github.com/distlanglabs/distlang/distlang/helpgen"
@@ -61,7 +62,21 @@ func ToScriptWithOptions(filename, source string, opts Options) (Result, error) 
 	usesLayers := usesDistlangLayers(source)
 
 	coreSource := helpgen.CoreInMemDB()
-	helpersSource := helpgen.DistlangHelpers()
+	helperModules := map[string]string{}
+	if usesHelpers {
+		moduleNames, err := helpgen.DistlangHelperModules()
+		if err != nil {
+			return Result{}, err
+		}
+		sort.Strings(moduleNames)
+		for _, moduleName := range moduleNames {
+			contents, err := helpgen.DistlangHelperModule(moduleName)
+			if err != nil {
+				return Result{}, err
+			}
+			helperModules[moduleName] = contents
+		}
+	}
 	layersSource := helpgen.LayersSimpleApp()
 	if usesCore || usesHelpers {
 		generated = append(generated, artifacts.Artifact{
@@ -70,10 +85,17 @@ func ToScriptWithOptions(filename, source string, opts Options) (Result, error) 
 		})
 	}
 	if usesHelpers {
-		generated = append(generated, artifacts.Artifact{
-			Path:    filepath.Join("generated", "distlang", "index.js"),
-			Content: []byte(helpersSource),
-		})
+		moduleNames := make([]string, 0, len(helperModules))
+		for moduleName := range helperModules {
+			moduleNames = append(moduleNames, moduleName)
+		}
+		sort.Strings(moduleNames)
+		for _, moduleName := range moduleNames {
+			generated = append(generated, artifacts.Artifact{
+				Path:    filepath.Join("generated", "distlang", moduleName),
+				Content: []byte(helperModules[moduleName]),
+			})
+		}
 	}
 	if usesLayers {
 		generated = append(generated, artifacts.Artifact{
@@ -90,7 +112,10 @@ func ToScriptWithOptions(filename, source string, opts Options) (Result, error) 
 					return api.OnResolveResult{Path: "distlang/core", Namespace: "distlang-core"}, nil
 				})
 				build.OnResolve(api.OnResolveOptions{Filter: `^distlang$`}, func(args api.OnResolveArgs) (api.OnResolveResult, error) {
-					return api.OnResolveResult{Path: "distlang", Namespace: "distlang-helpers"}, nil
+					return api.OnResolveResult{Path: "index.js", Namespace: "distlang-helpers"}, nil
+				})
+				build.OnResolve(api.OnResolveOptions{Filter: `^\./.*`, Namespace: "distlang-helpers"}, func(args api.OnResolveArgs) (api.OnResolveResult, error) {
+					return api.OnResolveResult{Path: strings.TrimPrefix(args.Path, "./"), Namespace: "distlang-helpers"}, nil
 				})
 				build.OnResolve(api.OnResolveOptions{Filter: `^distlang/layers$`}, func(args api.OnResolveArgs) (api.OnResolveResult, error) {
 					return api.OnResolveResult{Path: "distlang/layers", Namespace: "distlang-layers"}, nil
@@ -101,7 +126,11 @@ func ToScriptWithOptions(filename, source string, opts Options) (Result, error) 
 				})
 				build.OnLoad(api.OnLoadOptions{Filter: `.*`, Namespace: "distlang-helpers"}, func(args api.OnLoadArgs) (api.OnLoadResult, error) {
 					loader := api.LoaderJS
-					return api.OnLoadResult{Contents: &helpersSource, Loader: loader}, nil
+					contents, ok := helperModules[args.Path]
+					if !ok {
+						return api.OnLoadResult{}, fmt.Errorf("unknown distlang helper module: %s", args.Path)
+					}
+					return api.OnLoadResult{Contents: &contents, Loader: loader}, nil
 				})
 				build.OnLoad(api.OnLoadOptions{Filter: `.*`, Namespace: "distlang-layers"}, func(args api.OnLoadArgs) (api.OnLoadResult, error) {
 					loader := api.LoaderJS

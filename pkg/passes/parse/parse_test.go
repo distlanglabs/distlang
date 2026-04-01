@@ -59,17 +59,21 @@ func TestToScriptGeneratesDistlangHelpersModule(t *testing.T) {
 		t.Fatalf("ToScriptWithOptions error: %v", err)
 	}
 
-	if len(res.Artifacts) != 2 {
-		t.Fatalf("expected 2 generated artifacts, got %d", len(res.Artifacts))
+	if len(res.Artifacts) < 2 {
+		t.Fatalf("expected at least 2 generated artifacts, got %d", len(res.Artifacts))
 	}
-	if res.Artifacts[0].Path != "generated/distlang/core/index.js" {
-		t.Fatalf("unexpected first generated path: %s", res.Artifacts[0].Path)
+	artifactByPath := map[string]string{}
+	for _, artifact := range res.Artifacts {
+		artifactByPath[artifact.Path] = string(artifact.Content)
 	}
-	if res.Artifacts[1].Path != "generated/distlang/index.js" {
-		t.Fatalf("unexpected second generated path: %s", res.Artifacts[1].Path)
+	if _, ok := artifactByPath["generated/distlang/core/index.js"]; !ok {
+		t.Fatalf("missing generated core helper: %#v", artifactByPath)
 	}
-	if !strings.Contains(string(res.Artifacts[1].Content), "export const helpers") {
-		t.Fatalf("generated helper missing helpers export: %s", string(res.Artifacts[1].Content))
+	if _, ok := artifactByPath["generated/distlang/index.js"]; !ok {
+		t.Fatalf("missing generated helpers index: %#v", artifactByPath)
+	}
+	if !strings.Contains(artifactByPath["generated/distlang/index.js"], "export const helpers") {
+		t.Fatalf("generated helper missing helpers export: %s", artifactByPath["generated/distlang/index.js"])
 	}
 	if !strings.Contains(res.Code, "wrapWorkerWithHelpers") {
 		t.Fatalf("expected helpers wrapper in emitted code: %s", res.Code)
