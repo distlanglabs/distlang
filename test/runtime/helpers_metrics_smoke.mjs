@@ -88,6 +88,13 @@ async function runMockModeScenario(handlerSet1Worker, handlerSet2Worker) {
     __DISTLANG_SIMPLEAPP_TARGET__: "handlerSet2",
   });
   assert(echoRes.status === 200, `mock echo failed: ${echoRes.status}`);
+
+  const metricsRes = await call(handlerSet1Worker, {
+    path: "/metrics/query",
+    method: "POST",
+  }, env);
+  assert(metricsRes.status === 200, `mock metrics query failed: ${metricsRes.status}`);
+  assert(metricsRes.body?.series?.status === "success", `unexpected mock metrics query body: ${JSON.stringify(metricsRes.body)}`);
 }
 
 async function runLiveModeScenario(handlerSet1Worker, handlerSet2Worker) {
@@ -117,16 +124,27 @@ async function runLiveModeScenario(handlerSet1Worker, handlerSet2Worker) {
     });
     assert(echoRes.status === 200, `live echo failed: ${echoRes.status}`);
 
-    const analyticsCalls = mockServer.calls.filter((entry) => entry.path.startsWith("/analyticsdb/v1/"));
-    assert(analyticsCalls.length >= 2, `expected analytics helper calls, got ${JSON.stringify(analyticsCalls)}`);
-    assert(analyticsCalls.some((entry) => entry.method === "POST" && entry.path.endsWith("/simpleApp-metrics/rows")), "expected analytics row write call");
+    const metricsReadRes = await call(handlerSet1Worker, {
+      path: "/metrics/query",
+      method: "POST",
+    }, env);
+    assert(metricsReadRes.status === 200, `live metrics query failed: ${metricsReadRes.status}`);
+    assert(metricsReadRes.body?.series?.status === "success", `unexpected live metrics query body: ${JSON.stringify(metricsReadRes.body)}`);
+    assert(metricsReadRes.body?.metadata?.status === "success", `expected metrics metadata response: ${JSON.stringify(metricsReadRes.body)}`);
+    assert(Array.isArray(metricsReadRes.body?.labels?.data), `expected metrics labels response: ${JSON.stringify(metricsReadRes.body)}`);
 
-    const rows = mockServer.analyticsRows.get("simpleApp-metrics") || [];
+    const metricsCalls = mockServer.calls.filter((entry) => entry.path.startsWith("/metrics/v1/"));
+    assert(metricsCalls.length >= 4, `expected metrics helper calls, got ${JSON.stringify(metricsCalls)}`);
+    assert(metricsCalls.some((entry) => entry.method === "POST" && entry.path.endsWith("/simpleapp-metrics/rows")), "expected metrics row write call");
+    assert(metricsCalls.some((entry) => entry.method === "PUT" && entry.path.includes("/simpleapp-metrics/metadata")), `expected metrics metadata write call, got ${JSON.stringify(metricsCalls)}`);
+
+    const rows = mockServer.analyticsRows.get("simpleapp-metrics") || [];
     assert(rows.length > 0, "expected metrics rows to be written");
     const writtenMetrics = rows.map((row) => row.data?.metric).filter(Boolean);
     assert(writtenMetrics.includes("echoConfigReqs"), `expected echoConfigReqs metric, got ${JSON.stringify(writtenMetrics)}`);
     assert(writtenMetrics.includes("dbCallLatency"), `expected dbCallLatency metric, got ${JSON.stringify(writtenMetrics)}`);
     assert(writtenMetrics.includes("edgeReqCount"), `expected edgeReqCount metric, got ${JSON.stringify(writtenMetrics)}`);
+    assert(rows.some((row) => row.data?.labels?.route === "/echo/:text"), `expected labeled metrics rows, got ${JSON.stringify(rows)}`);
   } finally {
     await mockServer.close();
   }
@@ -145,8 +163,11 @@ async function main() {
   console.log("Running metrics mock mode scenario...");
   await runMockModeScenario(handlerSet1Worker, handlerSet2Worker);
 
+  const liveHandlerSet1Worker = await loadWorker("handlerSet1");
+  const liveHandlerSet2Worker = await loadWorker("handlerSet2");
+
   console.log("Running metrics live mode scenario against local mock helpers server...");
-  await runLiveModeScenario(handlerSet1Worker, handlerSet2Worker);
+  await runLiveModeScenario(liveHandlerSet1Worker, liveHandlerSet2Worker);
 
   console.log("helpers_metrics_smoke: PASS");
 }

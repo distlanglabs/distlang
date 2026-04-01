@@ -38,6 +38,9 @@ export async function startMockHelpersServer(options = {}) {
   const buckets = new Map();
   const analyticsBuckets = new Set();
   const analyticsRows = new Map();
+  const metricsBuckets = new Set();
+  const metricsMetadata = new Map();
+  const metricsRows = new Map();
   const calls = [];
 
   const server = http.createServer(async (req, res) => {
@@ -64,16 +67,60 @@ export async function startMockHelpersServer(options = {}) {
       return;
     }
 
-    if (req.method === "GET" && url.pathname === "/analyticsdb/v1") {
+    if (req.method === "GET" && url.pathname === "/metrics/v1") {
       json(res, 200, {
         ok: true,
-        service: "analyticsdb",
+        service: "metrics",
         version: "mock",
         routes: {
-          buckets: "/analyticsdb/v1/buckets/:bucket",
-          rows: "/analyticsdb/v1/buckets/:bucket/rows",
+          buckets: "/metrics/v1/buckets/:bucket",
+          metadata: "/metrics/v1/buckets/:bucket/metadata",
+          rows: "/metrics/v1/buckets/:bucket/rows",
+          query: "/metrics/v1/api/v1/query",
+          query_range: "/metrics/v1/api/v1/query_range",
         },
       });
+      return;
+    }
+
+    if (req.method === "GET" && url.pathname === "/metrics/v1/api/v1/query") {
+      const query = url.searchParams.get("query") || "";
+      const time = url.searchParams.get("time");
+      json(res, 200, mockMetricsQuery(metricsRows, query, { time }));
+      return;
+    }
+
+    if (req.method === "GET" && url.pathname === "/metrics/v1/api/v1/query_range") {
+      const query = url.searchParams.get("query") || "";
+      const start = url.searchParams.get("start");
+      const end = url.searchParams.get("end");
+      const step = url.searchParams.get("step");
+      json(res, 200, mockMetricsQueryRange(metricsRows, query, { start, end, step }));
+      return;
+    }
+
+    if (req.method === "GET" && url.pathname === "/metrics/v1/api/v1/series") {
+      const match = url.searchParams.getAll("match[]");
+      json(res, 200, mockMetricsSeries(metricsRows, { match }));
+      return;
+    }
+
+    if (req.method === "GET" && url.pathname === "/metrics/v1/api/v1/labels") {
+      const match = url.searchParams.getAll("match[]");
+      json(res, 200, mockMetricsLabels(metricsRows, { match }));
+      return;
+    }
+
+    const labelValuesMatch = url.pathname.match(/^\/metrics\/v1\/api\/v1\/label\/([^/]+)\/values$/);
+    if (labelValuesMatch && req.method === "GET") {
+      const match = url.searchParams.getAll("match[]");
+      json(res, 200, mockMetricsLabelValues(metricsRows, decodeURIComponent(labelValuesMatch[1]), { match }));
+      return;
+    }
+
+    if (req.method === "GET" && url.pathname === "/metrics/v1/api/v1/metadata") {
+      const metric = url.searchParams.get("metric") || "";
+      json(res, 200, mockMetricsMetadata(metricsMetadata, { metric }));
       return;
     }
 
@@ -129,31 +176,41 @@ export async function startMockHelpersServer(options = {}) {
       return;
     }
 
-    const analyticsBucketMatch = url.pathname.match(/^\/analyticsdb\/v1\/buckets\/([^/]+)$/);
-    if (analyticsBucketMatch && req.method === "PUT") {
-      const bucket = decodeURIComponent(analyticsBucketMatch[1]);
-      const created = !analyticsBuckets.has(bucket);
-      analyticsBuckets.add(bucket);
-      if (!analyticsRows.has(bucket)) {
-        analyticsRows.set(bucket, []);
+    const metricsBucketMatch = url.pathname.match(/^\/metrics\/v1\/buckets\/([^/]+)$/);
+    if (metricsBucketMatch && req.method === "PUT") {
+      const bucket = decodeURIComponent(metricsBucketMatch[1]);
+      const created = !metricsBuckets.has(bucket);
+      metricsBuckets.add(bucket);
+      if (!metricsRows.has(bucket)) {
+        metricsRows.set(bucket, []);
       }
       json(res, 200, { ok: true, bucket, created });
       return;
     }
 
-    const analyticsRowsMatch = url.pathname.match(/^\/analyticsdb\/v1\/buckets\/([^/]+)\/rows$/);
-    if (analyticsRowsMatch && req.method === "POST") {
-      const bucket = decodeURIComponent(analyticsRowsMatch[1]);
-      if (!analyticsBuckets.has(bucket)) {
-        analyticsBuckets.add(bucket);
+    const metricsMetadataMatch = url.pathname.match(/^\/metrics\/v1\/buckets\/([^/]+)\/metadata$/);
+    if (metricsMetadataMatch && req.method === "PUT") {
+      const bucket = decodeURIComponent(metricsMetadataMatch[1]);
+      const raw = await parseBody(req);
+      const body = raw.length === 0 ? {} : JSON.parse(raw.toString("utf8"));
+      metricsMetadata.set(bucket, body.metrics || {});
+      json(res, 200, { ok: true, bucket, metrics: body.metrics || {} });
+      return;
+    }
+
+    const metricsRowsMatch = url.pathname.match(/^\/metrics\/v1\/buckets\/([^/]+)\/rows$/);
+    if (metricsRowsMatch && req.method === "POST") {
+      const bucket = decodeURIComponent(metricsRowsMatch[1]);
+      if (!metricsBuckets.has(bucket)) {
+        metricsBuckets.add(bucket);
       }
-      if (!analyticsRows.has(bucket)) {
-        analyticsRows.set(bucket, []);
+      if (!metricsRows.has(bucket)) {
+        metricsRows.set(bucket, []);
       }
       const raw = await parseBody(req);
       const body = raw.length === 0 ? {} : JSON.parse(raw.toString("utf8"));
       const rows = Array.isArray(body.rows) ? body.rows : [];
-      analyticsRows.get(bucket).push(...rows);
+      metricsRows.get(bucket).push(...rows);
       json(res, 201, { ok: true, bucket, written: rows.length });
       return;
     }
@@ -235,7 +292,7 @@ export async function startMockHelpersServer(options = {}) {
   return {
     token,
     calls,
-    analyticsRows,
+    analyticsRows: metricsRows,
     baseURL: `http://127.0.0.1:${port}`,
     close: async () => {
       await new Promise((resolve, reject) => {
@@ -249,4 +306,221 @@ export async function startMockHelpersServer(options = {}) {
       });
     },
   };
+}
+
+function allMetricRows(store) {
+  const rows = [];
+  for (const [bucket, bucketRows] of store.entries()) {
+    for (const row of bucketRows) {
+      rows.push({ bucket, row });
+    }
+  }
+  return rows;
+}
+
+function mockMetricsQuery(store, query, options = {}) {
+  const parsed = parseQuery(query);
+  const evalTime = parseTime(options.time) || Date.now();
+  const grouped = groupSeries(store, parsed.selector);
+  const result = [];
+  for (const entry of grouped.values()) {
+    const value = evalSeries(parsed, entry.points, evalTime);
+    if (value == null) {
+      continue;
+    }
+    result.push({ metric: entry.metric, value: [evalTime / 1000, String(value)] });
+  }
+  return { status: "success", data: { resultType: "vector", result } };
+}
+
+function mockMetricsQueryRange(store, query, options = {}) {
+  const parsed = parseQuery(query);
+  const start = parseTime(options.start);
+  const end = parseTime(options.end);
+  const step = parseStep(options.step);
+  const matrix = new Map();
+  for (let ts = start; ts <= end; ts += step) {
+    const vector = mockMetricsQuery(store, query, { time: String(ts / 1000) }).data.result;
+    for (const item of vector) {
+      const key = JSON.stringify(item.metric);
+      const entry = matrix.get(key) || { metric: item.metric, values: [] };
+      entry.values.push(item.value);
+      matrix.set(key, entry);
+    }
+  }
+  return { status: "success", data: { resultType: "matrix", result: Array.from(matrix.values()) } };
+}
+
+function mockMetricsSeries(store, options = {}) {
+  const selectors = Array.isArray(options.match) ? options.match.map(parseSelector) : [];
+  const series = new Map();
+  for (const { bucket, row } of allMetricRows(store)) {
+    const labels = rowLabels(bucket, row.data || row);
+    if (selectors.length > 0 && !selectors.some((selector) => matchesSelector(labels, selector))) {
+      continue;
+    }
+    series.set(JSON.stringify(labels), labels);
+  }
+  return { status: "success", data: Array.from(series.values()) };
+}
+
+function mockMetricsLabels(store, options = {}) {
+  const labels = new Set();
+  for (const item of mockMetricsSeries(store, options).data) {
+    for (const key of Object.keys(item)) {
+      labels.add(key);
+    }
+  }
+  return { status: "success", data: Array.from(labels).sort() };
+}
+
+function mockMetricsLabelValues(store, name, options = {}) {
+  const values = new Set();
+  for (const item of mockMetricsSeries(store, options).data) {
+    if (typeof item[name] === "string") {
+      values.add(item[name]);
+    }
+  }
+  return { status: "success", data: Array.from(values).sort() };
+}
+
+function mockMetricsMetadata(store, options = {}) {
+  const data = {};
+  for (const [bucket, definitions] of store.entries()) {
+    for (const [name, definition] of Object.entries(definitions)) {
+      if (options.metric && options.metric !== name) {
+        continue;
+      }
+      if (!Array.isArray(data[name])) {
+        data[name] = [];
+      }
+      data[name].push({ type: definition.kind, help: definition.description, unit: definition.unit, bucket, labels: (definition.labels || []).join(",") });
+    }
+  }
+  return { status: "success", data };
+}
+
+function parseQuery(rawQuery) {
+  const query = String(rawQuery || "").trim();
+  const fnMatch = query.match(/^([a-zA-Z_][a-zA-Z0-9_]*)\((.+)\)$/);
+  if (fnMatch) {
+    const rangeMatch = fnMatch[2].trim().match(/^(.*)\[([^\]]+)\]$/);
+    return { kind: "rangeFunction", fn: fnMatch[1], selector: parseSelector(rangeMatch[1].trim()), rangeMs: parseDuration(rangeMatch[2].trim()) };
+  }
+  return { kind: "selector", selector: parseSelector(query) };
+}
+
+function parseSelector(rawSelector) {
+  const match = String(rawSelector || "").trim().match(/^([a-zA-Z_:][a-zA-Z0-9_:]*)(?:\{(.*)\})?$/);
+  const matchers = { __name__: match[1] };
+  if (match[2]) {
+    for (const part of match[2].split(",")) {
+      const matcher = part.trim().match(/^([a-zA-Z_][a-zA-Z0-9_]*)\s*=\s*"([^"]*)"$/);
+      matchers[matcher[1]] = matcher[2];
+    }
+  }
+  return { metric: match[1], matchers };
+}
+
+function groupSeries(store, selector) {
+  const grouped = new Map();
+  for (const { bucket, row } of allMetricRows(store)) {
+    const data = row.data || row;
+    const labels = rowLabels(bucket, data);
+    if (!matchesSelector(labels, selector)) {
+      continue;
+    }
+    const key = JSON.stringify(labels);
+    const entry = grouped.get(key) || { metric: labels, points: [] };
+    if (data.kind === "histogram") {
+      for (const value of data.values || []) {
+        entry.points.push({ ts: Date.parse(data.windowStart), value });
+      }
+    } else {
+      entry.points.push({ ts: Date.parse(data.windowStart), value: data.sum });
+    }
+    grouped.set(key, entry);
+  }
+  return grouped;
+}
+
+function rowLabels(bucket, data) {
+  return { __name__: data.metric, bucket, ...(data.labels || {}) };
+}
+
+function matchesSelector(labels, selector) {
+  for (const [key, value] of Object.entries(selector.matchers)) {
+    if (labels[key] !== value) {
+      return false;
+    }
+  }
+  return true;
+}
+
+function evalSeries(parsed, points, evalTime) {
+  const lookback = 5 * 60 * 1000;
+  if (parsed.kind === "selector") {
+    const latest = points.filter((point) => point.ts <= evalTime && point.ts >= evalTime - lookback).sort((a, b) => a.ts - b.ts).pop();
+    return latest ? latest.value : null;
+  }
+  const values = points.filter((point) => point.ts >= evalTime - parsed.rangeMs && point.ts <= evalTime).map((point) => point.value);
+  if (values.length === 0) {
+    return null;
+  }
+  switch (parsed.fn) {
+    case "sum_over_time":
+    case "increase":
+      return values.reduce((sum, value) => sum + value, 0);
+    case "rate":
+      return values.reduce((sum, value) => sum + value, 0) / (parsed.rangeMs / 1000);
+    case "avg_over_time":
+      return values.reduce((sum, value) => sum + value, 0) / values.length;
+    case "p50":
+      return percentile(values, 50);
+    case "p90":
+      return percentile(values, 90);
+    case "p95":
+      return percentile(values, 95);
+    case "p99":
+      return percentile(values, 99);
+    default:
+      return null;
+  }
+}
+
+function percentile(values, pct) {
+  const sorted = [...values].sort((a, b) => a - b);
+  const index = Math.min(sorted.length - 1, Math.max(0, Math.ceil((pct / 100) * sorted.length) - 1));
+  return sorted[index];
+}
+
+function parseTime(value) {
+  const raw = String(value || "").trim();
+  const numeric = Number(raw);
+  if (Number.isFinite(numeric)) {
+    return numeric * 1000;
+  }
+  return Date.parse(raw);
+}
+
+function parseStep(value) {
+  const raw = String(value || "").trim();
+  const numeric = Number(raw);
+  if (Number.isFinite(numeric)) {
+    return numeric * 1000;
+  }
+  return parseDuration(raw);
+}
+
+function parseDuration(raw) {
+  const units = { ms: 1, s: 1000, m: 60 * 1000, h: 60 * 60 * 1000, d: 24 * 60 * 60 * 1000 };
+  let total = 0;
+  let consumed = 0;
+  let match;
+  const pattern = /(\d+(?:\.\d+)?)(ms|s|m|h|d)/g;
+  while ((match = pattern.exec(raw)) !== null) {
+    total += Number(match[1]) * units[match[2]];
+    consumed += match[0].length;
+  }
+  return consumed === raw.length ? total : 0;
 }
