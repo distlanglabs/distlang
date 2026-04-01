@@ -73,4 +73,6 @@ jobs:
           node-version: "20"
 
       - name: Run helpers runtime smoke tests
-        run: node test/runtime/helpers_objectdb_smoke.mjs
+        run: |
+          node test/runtime/helpers_objectdb_smoke.mjs
+          node test/runtime/helpers_metrics_smoke.mjs

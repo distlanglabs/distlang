@@ -36,6 +36,8 @@ function decodeValue(raw, contentType) {
 export async function startMockHelpersServer(options = {}) {
   const token = String(options.token || "local-service-token");
   const buckets = new Map();
+  const analyticsBuckets = new Set();
+  const analyticsRows = new Map();
   const calls = [];
 
   const server = http.createServer(async (req, res) => {
@@ -57,6 +59,19 @@ export async function startMockHelpersServer(options = {}) {
           buckets: "/objectdb/v1/buckets",
           keys: "/objectdb/v1/buckets/:bucket/keys",
           values: "/objectdb/v1/buckets/:bucket/values/:key",
+        },
+      });
+      return;
+    }
+
+    if (req.method === "GET" && url.pathname === "/analyticsdb/v1") {
+      json(res, 200, {
+        ok: true,
+        service: "analyticsdb",
+        version: "mock",
+        routes: {
+          buckets: "/analyticsdb/v1/buckets/:bucket",
+          rows: "/analyticsdb/v1/buckets/:bucket/rows",
         },
       });
       return;
@@ -111,6 +126,35 @@ export async function startMockHelpersServer(options = {}) {
         }));
       const keys = all.slice(0, Number.isFinite(limit) && limit > 0 ? limit : 1000);
       json(res, 200, { ok: true, bucket, keys, list_complete: keys.length === all.length, cursor: "" });
+      return;
+    }
+
+    const analyticsBucketMatch = url.pathname.match(/^\/analyticsdb\/v1\/buckets\/([^/]+)$/);
+    if (analyticsBucketMatch && req.method === "PUT") {
+      const bucket = decodeURIComponent(analyticsBucketMatch[1]);
+      const created = !analyticsBuckets.has(bucket);
+      analyticsBuckets.add(bucket);
+      if (!analyticsRows.has(bucket)) {
+        analyticsRows.set(bucket, []);
+      }
+      json(res, 200, { ok: true, bucket, created });
+      return;
+    }
+
+    const analyticsRowsMatch = url.pathname.match(/^\/analyticsdb\/v1\/buckets\/([^/]+)\/rows$/);
+    if (analyticsRowsMatch && req.method === "POST") {
+      const bucket = decodeURIComponent(analyticsRowsMatch[1]);
+      if (!analyticsBuckets.has(bucket)) {
+        analyticsBuckets.add(bucket);
+      }
+      if (!analyticsRows.has(bucket)) {
+        analyticsRows.set(bucket, []);
+      }
+      const raw = await parseBody(req);
+      const body = raw.length === 0 ? {} : JSON.parse(raw.toString("utf8"));
+      const rows = Array.isArray(body.rows) ? body.rows : [];
+      analyticsRows.get(bucket).push(...rows);
+      json(res, 201, { ok: true, bucket, written: rows.length });
       return;
     }
 
@@ -191,6 +235,7 @@ export async function startMockHelpersServer(options = {}) {
   return {
     token,
     calls,
+    analyticsRows,
     baseURL: `http://127.0.0.1:${port}`,
     close: async () => {
       await new Promise((resolve, reject) => {

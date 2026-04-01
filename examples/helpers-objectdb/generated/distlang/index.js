@@ -2,14 +2,28 @@ import { InMemDB } from "distlang/core";
 
 const defaultStoreBaseURL = "https://api.distlang.com";
 let currentEnv = null;
+let currentCtx = null;
 const mockBuckets = new Set();
+const mockMetricsBuckets = new Set();
+const mockMetricsRows = new Map();
+const metricsStates = new Set();
+const metricsWindowMs = 30 * 1000;
 
 export function wrapWorkerWithHelpers(worker) {
   return {
     ...worker,
     async fetch(request, env, ctx) {
       currentEnv = env || null;
-      return worker.fetch(request, env, ctx);
+      currentCtx = ctx || null;
+      try {
+        return await worker.fetch(request, env, ctx);
+      } finally {
+        queueFlushAllMetricsStates();
+        if (!currentCtx || typeof currentCtx.waitUntil !== "function") {
+          await settleAllMetricFlushes();
+        }
+        currentCtx = null;
+      }
     },
   };
 }
@@ -33,7 +47,7 @@ function helpersMode() {
   return "auto";
 }
 
-function liveConfig() {
+function liveConfig(errorPrefix) {
   const mode = helpersMode();
   const token = envString("DISTLANG_SERVICE_TOKEN");
   const baseURL = (envString("DISTLANG_STORE_BASE_URL") || defaultStoreBaseURL).replace(/\/$/, "");
@@ -43,7 +57,7 @@ function liveConfig() {
     return { live: false };
   }
   if (token === "") {
-    throw new Error("helpers.ObjectDB requires DISTLANG_SERVICE_TOKEN in live mode");
+    throw new Error(`${errorPrefix} requires DISTLANG_SERVICE_TOKEN in live mode`);
   }
 
   return { live: true, token, baseURL };
@@ -105,7 +119,10 @@ async function requestJSON(method, path, cfg, options = {}) {
 
   if (!res.ok) {
     const message = payload && typeof payload === "object" && payload.message ? payload.message : text || `${res.status} ${res.statusText}`;
-    throw new Error(`helpers.ObjectDB request failed (${res.status}): ${message}`);
+    const prefix = typeof options.errorPrefix === "string" && options.errorPrefix !== ""
+      ? options.errorPrefix
+      : "helpers request";
+    throw new Error(`${prefix} failed (${res.status}): ${message}`);
   }
 
   if (options.expectText) {
@@ -236,63 +253,64 @@ async function mockDelete(bucket, key) {
 
 const helpersObjectDB = {
   async status() {
-    const cfg = liveConfig();
+    const cfg = liveConfig("helpers.ObjectDB");
     if (!cfg.live) {
       return mockStatus();
     }
-    return requestJSON("GET", "/objectdb/v1", cfg);
+    return requestJSON("GET", "/objectdb/v1", cfg, { errorPrefix: "helpers.ObjectDB request" });
   },
 
   buckets: {
     async list() {
-      const cfg = liveConfig();
+      const cfg = liveConfig("helpers.ObjectDB");
       if (!cfg.live) {
         return mockBucketsList();
       }
-      return requestJSON("GET", "/objectdb/v1/buckets", cfg);
+      return requestJSON("GET", "/objectdb/v1/buckets", cfg, { errorPrefix: "helpers.ObjectDB request" });
     },
 
     async create(bucket) {
-      const cfg = liveConfig();
+      const cfg = liveConfig("helpers.ObjectDB");
       if (!cfg.live) {
         return mockBucketsCreate(bucket);
       }
-      return requestJSON("PUT", `/objectdb/v1/buckets/${encodePathPart(bucket)}`, cfg);
+      return requestJSON("PUT", `/objectdb/v1/buckets/${encodePathPart(bucket)}`, cfg, { errorPrefix: "helpers.ObjectDB request" });
     },
 
     async exists(bucket) {
-      const cfg = liveConfig();
+      const cfg = liveConfig("helpers.ObjectDB");
       if (!cfg.live) {
         return mockBucketsExists(bucket);
       }
-      const result = await requestJSON("GET", "/objectdb/v1/buckets", cfg);
+      const result = await requestJSON("GET", "/objectdb/v1/buckets", cfg, { errorPrefix: "helpers.ObjectDB request" });
       const target = String(bucket);
       return !!(result && Array.isArray(result.buckets) && result.buckets.find((entry) => entry && entry.name === target));
     },
 
     async delete(bucket) {
-      const cfg = liveConfig();
+      const cfg = liveConfig("helpers.ObjectDB");
       if (!cfg.live) {
         return mockBucketsDelete(bucket);
       }
-      return requestJSON("DELETE", `/objectdb/v1/buckets/${encodePathPart(bucket)}`, cfg);
+      return requestJSON("DELETE", `/objectdb/v1/buckets/${encodePathPart(bucket)}`, cfg, { errorPrefix: "helpers.ObjectDB request" });
     },
   },
 
   keys: {
     async list(bucket, options = {}) {
-      const cfg = liveConfig();
+      const cfg = liveConfig("helpers.ObjectDB");
       if (!cfg.live) {
         return mockKeysList(bucket, options);
       }
       return requestJSON("GET", `/objectdb/v1/buckets/${encodePathPart(bucket)}/keys`, cfg, {
         query: listOptions(options),
+        errorPrefix: "helpers.ObjectDB request",
       });
     },
   },
 
   async put(bucket, key, value, options = {}) {
-    const cfg = liveConfig();
+    const cfg = liveConfig("helpers.ObjectDB");
     if (!cfg.live) {
       return mockPut(bucket, key, value);
     }
@@ -321,11 +339,12 @@ const helpersObjectDB = {
       headers: {
         "Content-Type": contentType,
       },
+      errorPrefix: "helpers.ObjectDB request",
     });
   },
 
   async get(bucket, key, options = {}) {
-    const cfg = liveConfig();
+    const cfg = liveConfig("helpers.ObjectDB");
     if (!cfg.live) {
       return mockGet(bucket, key);
     }
@@ -336,18 +355,20 @@ const helpersObjectDB = {
       query: responseType ? [["type", responseType]] : [],
       allowNotFound: true,
       expectText: responseType !== "json",
+      errorPrefix: "helpers.ObjectDB request",
     });
     return value;
   },
 
   async head(bucket, key) {
-    const cfg = liveConfig();
+    const cfg = liveConfig("helpers.ObjectDB");
     if (!cfg.live) {
       return mockHead(bucket, key);
     }
 
     const listed = await requestJSON("GET", `/objectdb/v1/buckets/${encodePathPart(bucket)}/keys`, cfg, {
       query: [["prefix", String(key)], ["limit", "1000"]],
+      errorPrefix: "helpers.ObjectDB request",
     });
     if (!listed || !Array.isArray(listed.keys)) {
       return null;
@@ -360,14 +381,209 @@ const helpersObjectDB = {
   },
 
   async delete(bucket, key) {
-    const cfg = liveConfig();
+    const cfg = liveConfig("helpers.ObjectDB");
     if (!cfg.live) {
       return mockDelete(bucket, key);
     }
-    return requestJSON("DELETE", `/objectdb/v1/buckets/${encodePathPart(bucket)}/values/${encodePathPart(key)}`, cfg);
+    return requestJSON("DELETE", `/objectdb/v1/buckets/${encodePathPart(bucket)}/values/${encodePathPart(key)}`, cfg, {
+      errorPrefix: "helpers.ObjectDB request",
+    });
   },
 };
 
+function instantiateMetrics(definition, bucketName) {
+  if (!definition || typeof definition !== "object" || Array.isArray(definition)) {
+    throw new Error("helpers.instantiateMetrics: definition must be an object");
+  }
+
+  const normalizedBucket = String(bucketName || "").trim();
+  if (normalizedBucket === "") {
+    throw new Error("helpers.instantiateMetrics: bucket name is required");
+  }
+
+  const instruments = {};
+  const state = {
+    bucket: normalizedBucket,
+    buffer: new Map(),
+    ensureStarted: false,
+    ensurePromise: Promise.resolve(),
+    flushPromise: Promise.resolve(),
+  };
+  metricsStates.add(state);
+
+  for (const [metricName, metricKind] of Object.entries(definition)) {
+    if (typeof metricName !== "string" || metricName.trim() === "") {
+      throw new Error("helpers.instantiateMetrics: metric names must be non-empty strings");
+    }
+    if (metricKind !== "counter" && metricKind !== "histogram") {
+      throw new Error(`helpers.instantiateMetrics: unsupported metric kind for ${metricName}: ${metricKind}`);
+    }
+
+    if (metricKind === "counter") {
+      instruments[metricName] = {
+        inc(value = 1) {
+          const amount = Number(value);
+          if (!Number.isFinite(amount) || amount <= 0) {
+            throw new Error(`helpers.instantiateMetrics: ${metricName}.inc value must be a positive number`);
+          }
+          recordMetric(state, metricName, metricKind, amount);
+        },
+      };
+      continue;
+    }
+
+    instruments[metricName] = {
+      observe(value) {
+        const amount = Number(value);
+        if (!Number.isFinite(amount)) {
+          throw new Error(`helpers.instantiateMetrics: ${metricName}.observe value must be a finite number`);
+        }
+        recordMetric(state, metricName, metricKind, amount);
+      },
+    };
+  }
+
+  return instruments;
+}
+
+function recordMetric(state, metricName, metricKind, value) {
+  ensureMetricsBucket(state);
+  const windowStart = windowStartISOString(Date.now());
+  const bufferKey = `${metricName}:${metricKind}:${windowStart}`;
+  let entry = state.buffer.get(bufferKey);
+  if (!entry) {
+    entry = {
+      metric: metricName,
+      kind: metricKind,
+      windowStart,
+      count: 0,
+      sum: 0,
+    };
+    if (metricKind === "histogram") {
+      entry.values = [];
+    }
+    state.buffer.set(bufferKey, entry);
+  }
+
+  entry.count += 1;
+  entry.sum += value;
+  if (metricKind === "histogram") {
+    entry.values.push(value);
+  }
+
+  queueMetricsFlush(state, { flushCurrentWindow: false });
+}
+
+function ensureMetricsBucket(state) {
+  if (state.ensureStarted) {
+    return;
+  }
+  state.ensureStarted = true;
+
+  const cfg = liveConfig("helpers.instantiateMetrics");
+  if (!cfg.live) {
+    mockMetricsBuckets.add(state.bucket);
+    if (!mockMetricsRows.has(state.bucket)) {
+      mockMetricsRows.set(state.bucket, []);
+    }
+    state.ensurePromise = Promise.resolve();
+    return;
+  }
+
+  state.ensurePromise = requestJSON("PUT", `/analyticsdb/v1/buckets/${encodePathPart(state.bucket)}`, cfg, {
+    errorPrefix: "helpers.Metrics request",
+  });
+  queueWithContext(state.ensurePromise);
+}
+
+function queueMetricsFlush(state, options = {}) {
+  state.flushPromise = state.flushPromise.then(async () => {
+    await state.ensurePromise;
+    const rows = collectMetricRows(state, options);
+    if (rows.length === 0) {
+      return;
+    }
+
+    const cfg = liveConfig("helpers.instantiateMetrics");
+    if (!cfg.live) {
+      const stored = mockMetricsRows.get(state.bucket) || [];
+      stored.push(...rows);
+      mockMetricsRows.set(state.bucket, stored);
+      return;
+    }
+
+    await requestJSON("POST", `/analyticsdb/v1/buckets/${encodePathPart(state.bucket)}/rows`, cfg, {
+      body: JSON.stringify({
+        rows: rows.map((row) => ({ ts: row.windowStart, data: row })),
+      }),
+      headers: { "Content-Type": "application/json" },
+      errorPrefix: "helpers.Metrics request",
+    });
+  });
+
+  queueWithContext(state.flushPromise);
+}
+
+function collectMetricRows(state, options = {}) {
+  const flushCurrentWindow = options.flushCurrentWindow === true;
+  const currentWindow = windowStartISOString(Date.now());
+  const rows = [];
+
+  for (const [bufferKey, entry] of Array.from(state.buffer.entries())) {
+    if (!flushCurrentWindow && entry.windowStart >= currentWindow) {
+      continue;
+    }
+    rows.push(cloneMetricRow(entry));
+    state.buffer.delete(bufferKey);
+  }
+
+  rows.sort((left, right) => left.windowStart.localeCompare(right.windowStart) || left.metric.localeCompare(right.metric));
+  return rows;
+}
+
+function cloneMetricRow(entry) {
+  const row = {
+    metric: entry.metric,
+    kind: entry.kind,
+    windowStart: entry.windowStart,
+    count: entry.count,
+    sum: entry.sum,
+  };
+  if (entry.kind === "histogram") {
+    row.values = [...entry.values];
+  }
+  return row;
+}
+
+function queueFlushAllMetricsStates() {
+  for (const state of metricsStates) {
+    if (state.buffer.size === 0) {
+      continue;
+    }
+    queueMetricsFlush(state, { flushCurrentWindow: true });
+  }
+}
+
+async function settleAllMetricFlushes() {
+  const flushes = [];
+  for (const state of metricsStates) {
+    flushes.push(Promise.resolve(state.flushPromise).catch(() => {}));
+  }
+  await Promise.all(flushes);
+}
+
+function queueWithContext(promise) {
+  if (currentCtx && typeof currentCtx.waitUntil === "function") {
+    currentCtx.waitUntil(Promise.resolve(promise).catch(() => {}));
+  }
+}
+
+function windowStartISOString(timestampMs) {
+  const windowStart = Math.floor(timestampMs / metricsWindowMs) * metricsWindowMs;
+  return new Date(windowStart).toISOString();
+}
+
 export const helpers = {
   ObjectDB: helpersObjectDB,
+  instantiateMetrics,
 };
