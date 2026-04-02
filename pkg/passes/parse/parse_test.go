@@ -109,7 +109,7 @@ func TestToScriptGeneratesLayersModule(t *testing.T) {
 }
 
 func TestToScriptGeneratesAppModule(t *testing.T) {
-	src := `import { app } from "distlang/app"; export default app({ state: { dbs: { ObjectDB: { get: async () => null, put: async () => null, buckets: { create: async () => null }, keys: { list: async () => [] } } } }, compute: { handles: { routes: { GET: { "/": async ({ req, state, params }) => new Response("ok") } } } } });`
+	src := `import { app } from "distlang/app"; export default app({ state: { dbs: { ObjectDB: { get: async () => null, put: async () => null, buckets: { create: async () => null }, keys: { list: async () => [] } } } }, compute: { handlers: { routes: { GET: { "/": async ({ req, state, params }) => new Response("ok") } } } } });`
 
 	res, err := ToScriptWithOptions("index.js", src, Options{Format: FormatV8})
 	if err != nil {

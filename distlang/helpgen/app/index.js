@@ -63,27 +63,27 @@ function normalizeDBs(dbs) {
   return resolved;
 }
 
-function normalizeHandles(handles) {
-  if (!isPlainObject(handles)) {
-    throw new Error("app: compute.handles must be an object");
+function normalizeHandlers(handlers) {
+  if (!isPlainObject(handlers)) {
+    throw new Error("app: compute.handlers must be an object");
   }
-  if (!isPlainObject(handles.routes)) {
-    throw new Error("app: compute.handles.routes must be an object");
+  if (!isPlainObject(handlers.routes)) {
+    throw new Error("app: compute.handlers.routes must be an object");
   }
 
   const seen = new Set();
   const compiledByMethod = new Map();
-  const routes = handles.routes;
+  const routes = handlers.routes;
 
   for (const key of Object.keys(routes)) {
     const method = key.toUpperCase();
     if (!allowedMethods.has(method)) {
-      throw new Error(`app: compute.handles.routes has unsupported method ${key}`);
+      throw new Error(`app: compute.handlers.routes has unsupported method ${key}`);
     }
 
     const routesByMethod = routes[key];
     if (!isPlainObject(routesByMethod)) {
-      throw new Error(`app: compute.handles.routes.${key} must be an object`);
+      throw new Error(`app: compute.handlers.routes.${key} must be an object`);
     }
 
     const entries = compiledByMethod.get(method) || [];
@@ -126,7 +126,7 @@ function normalizeSpec(spec) {
     state: {
       dbs: normalizeDBs(spec.state.dbs),
     },
-    compute: normalizeHandles(spec.compute.handles),
+    compute: normalizeHandlers(spec.compute.handlers),
   };
 }
 

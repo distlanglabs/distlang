@@ -12,7 +12,7 @@ app({
     },
   },
   compute: {
-    handles: appHandlers,
+    handlers: appHandlers,
   },
 })
 ```

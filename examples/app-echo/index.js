@@ -46,6 +46,6 @@ export default app({
     },
   },
   compute: {
-    handles: appHandlers,
+    handlers: appHandlers,
   },
 });
