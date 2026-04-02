@@ -59,6 +59,7 @@ func ToScriptWithOptions(filename, source string, opts Options) (Result, error) 
 	var generated []artifacts.Artifact
 	usesCore := usesDistlangCore(source)
 	usesHelpers := usesDistlangHelpers(source)
+	usesApp := usesDistlangApp(source)
 	usesLayers := usesDistlangLayers(source)
 
 	coreSource := helpgen.CoreInMemDB()
@@ -78,6 +79,7 @@ func ToScriptWithOptions(filename, source string, opts Options) (Result, error) 
 		}
 	}
 	layersSource := helpgen.LayersSimpleApp()
+	appSource := helpgen.AppIndex()
 	if usesCore || usesHelpers {
 		generated = append(generated, artifacts.Artifact{
 			Path:    filepath.Join("generated", "distlang", "core", "index.js"),
@@ -103,8 +105,14 @@ func ToScriptWithOptions(filename, source string, opts Options) (Result, error) 
 			Content: []byte(layersSource),
 		})
 	}
+	if usesApp {
+		generated = append(generated, artifacts.Artifact{
+			Path:    filepath.Join("generated", "distlang", "app", "index.js"),
+			Content: []byte(appSource),
+		})
+	}
 
-	if usesCore || usesHelpers || usesLayers {
+	if usesCore || usesHelpers || usesLayers || usesApp {
 		buildOpts.Plugins = []api.Plugin{{
 			Name: "distlang-modules",
 			Setup: func(build api.PluginBuild) {
@@ -119,6 +127,9 @@ func ToScriptWithOptions(filename, source string, opts Options) (Result, error) 
 				})
 				build.OnResolve(api.OnResolveOptions{Filter: `^distlang/layers$`}, func(args api.OnResolveArgs) (api.OnResolveResult, error) {
 					return api.OnResolveResult{Path: "distlang/layers", Namespace: "distlang-layers"}, nil
+				})
+				build.OnResolve(api.OnResolveOptions{Filter: `^distlang/app$`}, func(args api.OnResolveArgs) (api.OnResolveResult, error) {
+					return api.OnResolveResult{Path: "distlang/app", Namespace: "distlang-app"}, nil
 				})
 				build.OnLoad(api.OnLoadOptions{Filter: `.*`, Namespace: "distlang-core"}, func(args api.OnLoadArgs) (api.OnLoadResult, error) {
 					loader := api.LoaderJS
@@ -135,6 +146,10 @@ func ToScriptWithOptions(filename, source string, opts Options) (Result, error) 
 				build.OnLoad(api.OnLoadOptions{Filter: `.*`, Namespace: "distlang-layers"}, func(args api.OnLoadArgs) (api.OnLoadResult, error) {
 					loader := api.LoaderJS
 					return api.OnLoadResult{Contents: &layersSource, Loader: loader}, nil
+				})
+				build.OnLoad(api.OnLoadOptions{Filter: `.*`, Namespace: "distlang-app"}, func(args api.OnLoadArgs) (api.OnLoadResult, error) {
+					loader := api.LoaderJS
+					return api.OnLoadResult{Contents: &appSource, Loader: loader}, nil
 				})
 			},
 		}}
@@ -188,6 +203,10 @@ func usesDistlangCore(source string) bool {
 
 func usesDistlangHelpers(source string) bool {
 	return strings.Contains(source, `from "distlang"`) || strings.Contains(source, "from 'distlang'")
+}
+
+func usesDistlangApp(source string) bool {
+	return strings.Contains(source, `from "distlang/app"`) || strings.Contains(source, "from 'distlang/app'")
 }
 
 func usesDistlangLayers(source string) bool {

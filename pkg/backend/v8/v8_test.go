@@ -30,3 +30,25 @@ func TestBuildSimpleAppProducesDualWorkers(t *testing.T) {
 		t.Fatalf("expected second worker handlerSet2, got %s", out.Workers[1].Name)
 	}
 }
+
+func TestBuildAppProducesSingleWorker(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "index.js")
+	src := `import { app } from "distlang/app"; const appHandlers = { routes: { GET: { "/": async ({ req, state, params }) => new Response("ok") } } }; export default app({ state: { dbs: { ObjectDB: { get: async () => null, put: async () => null, buckets: { create: async () => null }, keys: { list: async () => [] } } } }, compute: { handles: appHandlers } });`
+
+	if err := os.WriteFile(path, []byte(src), 0o644); err != nil {
+		t.Fatalf("write source: %v", err)
+	}
+
+	out, err := Build(path)
+	if err != nil {
+		t.Fatalf("Build error: %v", err)
+	}
+
+	if len(out.Workers) != 0 {
+		t.Fatalf("expected 0 split workers, got %d", len(out.Workers))
+	}
+	if out.EntryPath != filepath.Join("dist", "v8", "worker.js") {
+		t.Fatalf("unexpected entry path: %s", out.EntryPath)
+	}
+}

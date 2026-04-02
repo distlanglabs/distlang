@@ -56,3 +56,10 @@ var layersSimpleApp string
 func LayersSimpleApp() string {
 	return layersSimpleApp
 }
+
+//go:embed app/index.js
+var appIndex string
+
+func AppIndex() string {
+	return appIndex
+}

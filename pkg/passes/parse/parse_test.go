@@ -108,6 +108,28 @@ func TestToScriptGeneratesLayersModule(t *testing.T) {
 	}
 }
 
+func TestToScriptGeneratesAppModule(t *testing.T) {
+	src := `import { app } from "distlang/app"; export default app({ state: { dbs: { ObjectDB: { get: async () => null, put: async () => null, buckets: { create: async () => null }, keys: { list: async () => [] } } } }, compute: { handles: { routes: { GET: { "/": async ({ req, state, params }) => new Response("ok") } } } } });`
+
+	res, err := ToScriptWithOptions("index.js", src, Options{Format: FormatV8})
+	if err != nil {
+		t.Fatalf("ToScriptWithOptions error: %v", err)
+	}
+
+	if len(res.Artifacts) != 1 {
+		t.Fatalf("expected 1 generated artifact, got %d", len(res.Artifacts))
+	}
+	if res.Artifacts[0].Path != "generated/distlang/app/index.js" {
+		t.Fatalf("unexpected generated path: %s", res.Artifacts[0].Path)
+	}
+	if !strings.Contains(string(res.Artifacts[0].Content), "export function app") {
+		t.Fatalf("generated helper missing app export: %s", string(res.Artifacts[0].Content))
+	}
+	if strings.Contains(res.Code, `from "distlang/app"`) || strings.Contains(res.Code, "from 'distlang/app'") {
+		t.Fatalf("expected distlang/app module to be bundled away: %s", res.Code)
+	}
+}
+
 func TestToScriptChainsDistlangWrappers(t *testing.T) {
 	src := `import { InMemDB } from "distlang/core"; import { helpers } from "distlang"; export default { async fetch(request) { await InMemDB.put("a", 1); return Response.json(await helpers.ObjectDB.status()) } }`
 
