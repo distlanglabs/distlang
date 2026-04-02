@@ -20,6 +20,10 @@ func main() {
 		usage()
 		return
 	}
+	if command == "-v" || command == "--version" {
+		printVersion()
+		return
+	}
 	if command == "--full-help" {
 		fullHelp()
 		return
@@ -78,6 +82,9 @@ func main() {
 		os.Exit(runRun(args))
 	case "debug":
 		os.Exit(runDebug(args))
+	case "version":
+		printVersion()
+		return
 	default:
 		fmt.Fprintf(os.Stderr, "unknown command: %s\n\n", command)
 		usage()

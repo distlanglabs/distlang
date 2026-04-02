@@ -4,6 +4,9 @@ RELEASE_DIR := dist/release
 RELEASE_BIN_DIR := $(RELEASE_DIR)/bin
 RELEASE_ASSETS := $(RELEASE_DIR)/assets
 PLATFORMS := linux/amd64 linux/arm64 darwin/amd64 darwin/arm64 windows/amd64 windows/arm64
+VERSION := $(shell git describe --tags --always --dirty 2>/dev/null || printf dev)
+COMMIT := $(shell git rev-parse --short HEAD 2>/dev/null || printf unknown)
+LDFLAGS := -X main.version=$(VERSION) -X main.commit=$(COMMIT)
 
 .PHONY: help run build build-cross package checksums release-local test fmt tidy clean
 
@@ -21,11 +24,11 @@ help:
 	@echo "  make clean  - remove build artifacts"
 
 run:
-	go run $(CMD)
+	go run -ldflags '$(LDFLAGS)' $(CMD)
 
 build:
 	mkdir -p bin
-	go build -o bin/$(APP) $(CMD)
+	go build -ldflags '$(LDFLAGS)' -o bin/$(APP) $(CMD)
 
 build-cross:
 	mkdir -p $(RELEASE_BIN_DIR)
@@ -37,7 +40,7 @@ build-cross:
 		if [ "$$os" = "windows" ]; then ext=".exe"; fi; \
 		out="$(RELEASE_BIN_DIR)/$(APP)_$${os}_$${arch}$$ext"; \
 		echo "Building $$out"; \
-		CGO_ENABLED=0 GOOS=$$os GOARCH=$$arch go build -o "$$out" $(CMD); \
+		CGO_ENABLED=0 GOOS=$$os GOARCH=$$arch go build -ldflags '$(LDFLAGS)' -o "$$out" $(CMD); \
 	done
 
 package: build-cross

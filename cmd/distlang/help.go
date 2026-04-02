@@ -15,11 +15,13 @@ var commands = []commandInfo{
 	{Name: "helpers", Description: "Manage Distlang helper auth session and store access", Usage: "distlang helpers <login|serve|store|whoami|logout>"},
 	{Name: "run", Description: "Run the local V8 runtime", Usage: "distlang run <file> [--v8-port=N] [--set=all|handlerSet1|handlerSet2] [--port1=N] [--port2=N]"},
 	{Name: "debug", Description: "Inspect compiler passes for build or run", Usage: "distlang debug <build|run> <file> [--passes=parse,ir,emit]"},
+	{Name: "version", Description: "Show distlang version information", Usage: "distlang version"},
 	{Name: "help", Description: "Show help for distlang", Usage: "distlang help"},
 }
 
 var globalFlags = []string{
 	"-h, --help           Show help for distlang",
+	"-v, --version        Show distlang version information",
 	"--full-help          Show global and per-command help",
 }
 
