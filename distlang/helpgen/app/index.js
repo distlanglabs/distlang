@@ -52,11 +52,23 @@ function normalizeDBs(dbs) {
     throw new Error("app: state.dbs must be an object");
   }
 
+  return normalizeStateEntries(dbs, "app: state.dbs");
+}
+
+function normalizeObservability(observability) {
+  if (!isPlainObject(observability)) {
+    throw new Error("app: state.observability must be an object");
+  }
+
+  return normalizeStateEntries(observability, "app: state.observability");
+}
+
+function normalizeStateEntries(entries, errorPrefix) {
   const resolved = {};
-  for (const key of Object.keys(dbs)) {
-    const value = dbs[key];
+  for (const key of Object.keys(entries)) {
+    const value = entries[key];
     if (!isPlainObject(value) && typeof value !== "function") {
-      throw new Error(`app: state.dbs.${key} must be an object`);
+      throw new Error(`${errorPrefix}.${key} must be an object`);
     }
     resolved[key] = value;
   }
@@ -125,6 +137,7 @@ function normalizeSpec(spec) {
   return {
     state: {
       dbs: normalizeDBs(spec.state.dbs),
+      observability: "observability" in spec.state ? normalizeObservability(spec.state.observability) : {},
     },
     compute: normalizeHandlers(spec.compute.handlers),
   };

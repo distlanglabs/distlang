@@ -34,7 +34,7 @@ func TestBuildSimpleAppProducesDualWorkers(t *testing.T) {
 func TestBuildAppProducesSingleWorker(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "index.js")
-	src := `import { app } from "distlang/app"; const appHandlers = { routes: { GET: { "/": async ({ req, state, params }) => new Response("ok") } } }; export default app({ state: { dbs: { ObjectDB: { get: async () => null, put: async () => null, buckets: { create: async () => null }, keys: { list: async () => [] } } } }, compute: { handlers: appHandlers } });`
+	src := `import { helpers } from "distlang"; import { app } from "distlang/app"; const appHandlers = { routes: { GET: { "/": async ({ req, state, params }) => { state.observability.AppMetrics.requests.inc(); return new Response("ok") } } } }; export default app({ state: { dbs: { ObjectDB: { get: async () => null, put: async () => null, buckets: { create: async () => null }, keys: { list: async () => [] } } }, observability: { AppMetrics: helpers.instantiateMetrics({ requests: "counter" }, "build-test-metrics") } }, compute: { handlers: appHandlers } });`
 
 	if err := os.WriteFile(path, []byte(src), 0o644); err != nil {
 		t.Fatalf("write source: %v", err)

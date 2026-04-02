@@ -130,6 +130,22 @@ func TestToScriptGeneratesAppModule(t *testing.T) {
 	}
 }
 
+func TestToScriptGeneratesAppModuleWithObservability(t *testing.T) {
+	src := `import { helpers } from "distlang"; import { app } from "distlang/app"; const metrics = helpers.instantiateMetrics({ requests: "counter" }, "test-metrics"); export default app({ state: { dbs: { ObjectDB: { get: async () => null, put: async () => null, buckets: { create: async () => null }, keys: { list: async () => [] } } }, observability: { AppMetrics: metrics } }, compute: { handlers: { routes: { GET: { "/": async ({ req, state, params }) => { state.observability.AppMetrics.requests.inc(); return new Response("ok") } } } } } });`
+
+	res, err := ToScriptWithOptions("index.js", src, Options{Format: FormatV8})
+	if err != nil {
+		t.Fatalf("ToScriptWithOptions error: %v", err)
+	}
+
+	if len(res.Artifacts) < 2 {
+		t.Fatalf("expected generated helpers for distlang and distlang/app, got %d", len(res.Artifacts))
+	}
+	if !strings.Contains(res.Code, "state.observability.AppMetrics") {
+		t.Fatalf("expected emitted code to retain observability access: %s", res.Code)
+	}
+}
+
 func TestToScriptChainsDistlangWrappers(t *testing.T) {
 	src := `import { InMemDB } from "distlang/core"; import { helpers } from "distlang"; export default { async fetch(request) { await InMemDB.put("a", 1); return Response.json(await helpers.ObjectDB.status()) } }`
 

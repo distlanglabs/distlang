@@ -10,6 +10,9 @@ app({
     dbs: {
       ObjectDB: helpers.ObjectDB,
     },
+    observability: {
+      AppMetrics: helpers.instantiateMetrics(...),
+    },
   },
   compute: {
     handlers: appHandlers,
@@ -21,6 +24,8 @@ app({
 
 - `POST /echo/config`
 - `GET /echo/:text`
+
+The example records request metrics through `state.observability.AppMetrics` while storing config in `state.dbs.ObjectDB`.
 
 ## Build
 
