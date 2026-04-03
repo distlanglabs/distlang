@@ -26,6 +26,19 @@ func TestInferMetricsBuckets(t *testing.T) {
 			emitted: `const a = instantiateMetrics({ reqs: "counter" }, 'echo-metrics');`,
 			want:    []string{"echo-metrics"},
 		},
+		{
+			name: "supports multiline instantiate metrics call",
+			emitted: `const appMetrics = helpers.instantiateMetrics(
+				{
+					echoReqCount: {
+						kind: "counter",
+						labels: ["route", "method", "status"],
+					},
+				},
+				"app-echo-metrics",
+			);`,
+			want: []string{"app-echo-metrics"},
+		},
 	}
 
 	for _, tt := range tests {

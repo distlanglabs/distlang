@@ -10,7 +10,6 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"regexp"
 	"sort"
 	"strings"
 	"time"
@@ -403,25 +402,12 @@ func redactToken(token string) string {
 	return token[:12] + "..." + token[len(token)-6:]
 }
 
-var instantiateMetricsBucketPattern = regexp.MustCompile(`instantiateMetrics\([^\n]*?,\s*(?:"([^"]+)"|'([^']+)')\s*\)`)
-
 func inferMetricsBuckets(emitted string) []string {
 	if strings.TrimSpace(emitted) == "" {
 		return nil
 	}
-	matches := instantiateMetricsBucketPattern.FindAllStringSubmatch(emitted, -1)
-	if len(matches) == 0 {
-		return nil
-	}
 	set := map[string]struct{}{}
-	for _, match := range matches {
-		if len(match) < 3 {
-			continue
-		}
-		bucket := strings.TrimSpace(match[1])
-		if bucket == "" {
-			bucket = strings.TrimSpace(match[2])
-		}
+	for _, bucket := range findInstantiateMetricsBuckets(emitted) {
 		if bucket == "" {
 			continue
 		}
@@ -436,6 +422,131 @@ func inferMetricsBuckets(emitted string) []string {
 	}
 	sort.Strings(buckets)
 	return buckets
+}
+
+func findInstantiateMetricsBuckets(emitted string) []string {
+	const marker = "instantiateMetrics("
+	buckets := []string{}
+	for start := 0; start < len(emitted); {
+		idx := strings.Index(emitted[start:], marker)
+		if idx < 0 {
+			break
+		}
+		open := start + idx + len(marker) - 1
+		close := matchingParenIndex(emitted, open)
+		if close < 0 {
+			break
+		}
+		args := splitTopLevelArgs(emitted[open+1 : close])
+		if len(args) >= 2 {
+			if bucket, ok := trimQuotedString(args[1]); ok {
+				buckets = append(buckets, bucket)
+			}
+		}
+		start = close + 1
+	}
+	return buckets
+}
+
+func matchingParenIndex(s string, open int) int {
+	depth := 0
+	quote := byte(0)
+	escaped := false
+	for i := open; i < len(s); i++ {
+		ch := s[i]
+		if quote != 0 {
+			if escaped {
+				escaped = false
+				continue
+			}
+			if ch == '\\' {
+				escaped = true
+				continue
+			}
+			if ch == quote {
+				quote = 0
+			}
+			continue
+		}
+		if ch == '\'' || ch == '"' || ch == '`' {
+			quote = ch
+			continue
+		}
+		switch ch {
+		case '(':
+			depth++
+		case ')':
+			depth--
+			if depth == 0 {
+				return i
+			}
+		}
+	}
+	return -1
+}
+
+func splitTopLevelArgs(s string) []string {
+	parts := []string{}
+	start := 0
+	parenDepth := 0
+	braceDepth := 0
+	bracketDepth := 0
+	quote := byte(0)
+	escaped := false
+	for i := 0; i < len(s); i++ {
+		ch := s[i]
+		if quote != 0 {
+			if escaped {
+				escaped = false
+				continue
+			}
+			if ch == '\\' {
+				escaped = true
+				continue
+			}
+			if ch == quote {
+				quote = 0
+			}
+			continue
+		}
+		if ch == '\'' || ch == '"' || ch == '`' {
+			quote = ch
+			continue
+		}
+		switch ch {
+		case '(':
+			parenDepth++
+		case ')':
+			parenDepth--
+		case '{':
+			braceDepth++
+		case '}':
+			braceDepth--
+		case '[':
+			bracketDepth++
+		case ']':
+			bracketDepth--
+		case ',':
+			if parenDepth == 0 && braceDepth == 0 && bracketDepth == 0 {
+				parts = append(parts, strings.TrimSpace(s[start:i]))
+				start = i + 1
+			}
+		}
+	}
+	parts = append(parts, strings.TrimSpace(s[start:]))
+	return parts
+}
+
+func trimQuotedString(s string) (string, bool) {
+	trimmed := strings.TrimSpace(s)
+	if len(trimmed) < 2 {
+		return "", false
+	}
+	quote := trimmed[0]
+	if (quote != '\'' && quote != '"') || trimmed[len(trimmed)-1] != quote {
+		return "", false
+	}
+	return trimmed[1 : len(trimmed)-1], true
 }
 
 func newDeploymentsListRequest(accessToken string) (*http.Request, error) {
