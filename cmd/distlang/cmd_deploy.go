@@ -13,7 +13,9 @@ import (
 	"github.com/distlanglabs/distlang/pkg/artifacts"
 	"github.com/distlanglabs/distlang/pkg/auth"
 	"github.com/distlanglabs/distlang/pkg/backend"
+	"github.com/distlanglabs/distlang/pkg/deployclient"
 	cloudflareprovider "github.com/distlanglabs/distlang/pkg/provider/cloudflare"
+	"github.com/distlanglabs/distlang/pkg/store"
 )
 
 func runDeploy(args []string) int {
@@ -22,7 +24,7 @@ func runDeploy(args []string) int {
 		return 0
 	}
 
-	target := "cloudflare"
+	target := "distlang"
 	filePath := ""
 
 	for _, arg := range args {
@@ -46,20 +48,73 @@ func runDeploy(args []string) int {
 
 	if filePath == "" {
 		fmt.Fprintln(os.Stderr, "deploy requires a file path")
-		fmt.Fprintln(os.Stderr, "Usage: distlang deploy <file> [--target=cloudflare]")
+		fmt.Fprintln(os.Stderr, "Usage: distlang deploy <file> [--target=distlang|cloudflare]")
 		return 1
 	}
 
+	if target == "distlang" {
+		return runHostedDeploy(filePath)
+	}
 	if target != "cloudflare" {
 		fmt.Fprintf(os.Stderr, "unsupported deploy target: %s\n", target)
 		return 1
 	}
 
+	return runCloudflareDeploy(filePath)
+}
+
+func runHostedDeploy(filePath string) int {
 	absFilePath, err := filepath.Abs(filePath)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "deploy failed: resolve file path: %v\n", err)
 		return 1
 	}
+	v8Out, err := backend.BuildV8(absFilePath)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "deploy failed: build v8 backend: %v\n", err)
+		return 1
+	}
+	if len(v8Out.Workers) > 0 {
+		fmt.Fprintln(os.Stderr, "deploy failed: hosted Distlang deploy currently supports single-worker apps only")
+		return 1
+	}
+	authClient := auth.NewClient(auth.ResolveBaseURL())
+	session, err := authClient.EnsureSession()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "deploy failed: hosted deploy requires login: %v\n", err)
+		return 1
+	}
+	serviceToken, err := resolveHelpersServiceToken(nil)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "deploy failed: %v\n", err)
+		return 1
+	}
+	client := deployclient.New(store.ResolveBaseURL())
+	request := deployclient.CreateDeploymentRequest{
+		App:          inferredAppName(absFilePath),
+		Provider:     "cloudflare",
+		ServiceToken: serviceToken,
+		CLIVersion:   version,
+		CLICommit:    commit,
+	}
+	request.Worker.Kind = "single"
+	request.Worker.Code = v8Out.Emitted
+	response, err := client.CreateDeployment(session.AccessToken, request)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "deploy failed: %v\n", err)
+		return 1
+	}
+	fmt.Printf("Hosted deploy succeeded\n- app: %s\n- script: %s\n- hostname: %s\n- url: %s\n", response.Deployment.App, response.Deployment.ScriptName, response.Deployment.Hostname, response.Deployment.URL)
+	return 0
+}
+
+func runCloudflareDeploy(filePath string) int {
+	absFilePath, err := filepath.Abs(filePath)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "deploy failed: resolve file path: %v\n", err)
+		return 1
+	}
+
 	projectDir := filepath.Dir(absFilePath)
 
 	originalDir, err := os.Getwd()
@@ -155,6 +210,15 @@ func runDeploy(args []string) int {
 	}
 
 	return 0
+}
+
+func inferredAppName(filePath string) string {
+	projectDir := filepath.Dir(filePath)
+	name := filepath.Base(projectDir)
+	if strings.TrimSpace(name) == "" || name == "." || name == string(filepath.Separator) {
+		return fileBase(filePath)
+	}
+	return name
 }
 
 func sourceUsesDistlangHelpers(filePath string) bool {

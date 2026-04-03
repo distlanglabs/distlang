@@ -11,7 +11,7 @@ type commandInfo struct {
 var commands = []commandInfo{
 	{Name: "build", Description: "Build backend artifacts and provider packages", Usage: "distlang build <file>"},
 	{Name: "target", Description: "Manage target setup scaffolding", Usage: "distlang target <subcommand>"},
-	{Name: "deploy", Description: "Deploy a backend through a provider", Usage: "distlang deploy <file> [--target=cloudflare]"},
+	{Name: "deploy", Description: "Deploy to Distlang hosting or a provider", Usage: "distlang deploy <file> [--target=distlang|cloudflare]"},
 	{Name: "helpers", Description: "Manage Distlang helper auth session and store access", Usage: "distlang helpers <login|serve|store|whoami|logout>"},
 	{Name: "run", Description: "Run the local V8 runtime", Usage: "distlang run <file> [--v8-port=N] [--set=all|handlerSet1|handlerSet2] [--port1=N] [--port2=N]"},
 	{Name: "debug", Description: "Inspect compiler passes for build or run", Usage: "distlang debug <build|run> <file> [--passes=parse,ir,emit]"},
@@ -87,10 +87,11 @@ func commandHelpBuild() {
 
 func commandHelpDeploy() {
 	fmt.Println("deploy - Deploy a backend through a provider")
-	fmt.Println("Usage: distlang deploy <file> [--target=cloudflare]")
+	fmt.Println("Usage: distlang deploy <file> [--target=distlang|cloudflare]")
 	fmt.Println("Options:")
-	fmt.Println("  --target=cloudflare   Deploy target provider (default: cloudflare)")
-	fmt.Println("Cloudflare credentials are loaded from shell env or <worker-dir>/targets/cloudflare/cloudflare.env")
+	fmt.Println("  --target=distlang     Deploy through Distlang hosting (default)")
+	fmt.Println("  --target=cloudflare   Deploy directly to your Cloudflare account")
+	fmt.Println("Cloudflare credentials are loaded from shell env or <worker-dir>/targets/cloudflare/cloudflare.env when using --target=cloudflare")
 }
 
 func commandHelpTarget() {
