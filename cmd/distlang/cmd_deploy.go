@@ -10,6 +10,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"sort"
 	"strings"
 	"time"
@@ -107,11 +108,12 @@ func runHostedDeploy(filePath string) int {
 	}
 	client := deployclient.New(store.ResolveBaseURL())
 	request := deployclient.CreateDeploymentRequest{
-		App:          inferredAppName(absFilePath),
-		Provider:     "cloudflare",
-		ServiceToken: serviceToken,
-		CLIVersion:   version,
-		CLICommit:    commit,
+		App:            inferredAppName(absFilePath),
+		MetricsBuckets: inferMetricsBuckets(v8Out.Emitted),
+		Provider:       "cloudflare",
+		ServiceToken:   serviceToken,
+		CLIVersion:     version,
+		CLICommit:      commit,
 	}
 	request.Worker.Kind = "single"
 	request.Worker.Code = v8Out.Emitted
@@ -399,6 +401,41 @@ func redactToken(token string) string {
 		return token
 	}
 	return token[:12] + "..." + token[len(token)-6:]
+}
+
+var instantiateMetricsBucketPattern = regexp.MustCompile(`instantiateMetrics\([^\n]*?,\s*(?:"([^"]+)"|'([^']+)')\s*\)`)
+
+func inferMetricsBuckets(emitted string) []string {
+	if strings.TrimSpace(emitted) == "" {
+		return nil
+	}
+	matches := instantiateMetricsBucketPattern.FindAllStringSubmatch(emitted, -1)
+	if len(matches) == 0 {
+		return nil
+	}
+	set := map[string]struct{}{}
+	for _, match := range matches {
+		if len(match) < 3 {
+			continue
+		}
+		bucket := strings.TrimSpace(match[1])
+		if bucket == "" {
+			bucket = strings.TrimSpace(match[2])
+		}
+		if bucket == "" {
+			continue
+		}
+		set[bucket] = struct{}{}
+	}
+	if len(set) == 0 {
+		return nil
+	}
+	buckets := make([]string, 0, len(set))
+	for bucket := range set {
+		buckets = append(buckets, bucket)
+	}
+	sort.Strings(buckets)
+	return buckets
 }
 
 func newDeploymentsListRequest(accessToken string) (*http.Request, error) {

@@ -16,27 +16,29 @@ type Client struct {
 }
 
 type CreateDeploymentRequest struct {
-	App          string `json:"app"`
-	Provider     string `json:"provider"`
-	ServiceToken string `json:"serviceToken"`
-	CLIVersion   string `json:"cliVersion"`
-	CLICommit    string `json:"cliCommit"`
-	Worker       struct {
+	App            string   `json:"app"`
+	MetricsBuckets []string `json:"metricsBuckets,omitempty"`
+	Provider       string   `json:"provider"`
+	ServiceToken   string   `json:"serviceToken"`
+	CLIVersion     string   `json:"cliVersion"`
+	CLICommit      string   `json:"cliCommit"`
+	Worker         struct {
 		Kind string `json:"kind"`
 		Code string `json:"code"`
 	} `json:"worker"`
 }
 
 type DeploymentRecord struct {
-	ID         string `json:"id"`
-	App        string `json:"app"`
-	Provider   string `json:"provider"`
-	ScriptName string `json:"scriptName"`
-	Hostname   string `json:"hostname"`
-	URL        string `json:"url"`
-	Status     string `json:"status"`
-	CreatedAt  string `json:"createdAt"`
-	UpdatedAt  string `json:"updatedAt"`
+	ID             string   `json:"id"`
+	App            string   `json:"app"`
+	MetricsBuckets []string `json:"metricsBuckets"`
+	Provider       string   `json:"provider"`
+	ScriptName     string   `json:"scriptName"`
+	Hostname       string   `json:"hostname"`
+	URL            string   `json:"url"`
+	Status         string   `json:"status"`
+	CreatedAt      string   `json:"createdAt"`
+	UpdatedAt      string   `json:"updatedAt"`
 }
 
 type CreateDeploymentResponse struct {
