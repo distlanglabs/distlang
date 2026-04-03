@@ -31,6 +31,15 @@ type ServiceTokenResponse struct {
 	TokenType   string `json:"token_type"`
 }
 
+type ServiceTokenWhoAmIResponse struct {
+	User  User `json:"user"`
+	Token struct {
+		Scope     string `json:"scope"`
+		Service   string `json:"service"`
+		CreatedAt string `json:"created_at"`
+	} `json:"token"`
+}
+
 type Client struct {
 	baseURL    string
 	httpClient *http.Client
@@ -125,6 +134,14 @@ func (c *Client) ServiceToken(accessToken, service string, rotate bool) (Service
 	}
 	if strings.TrimSpace(response.AccessToken) == "" {
 		return ServiceTokenResponse{}, fmt.Errorf("auth response missing service token")
+	}
+	return response, nil
+}
+
+func (c *Client) ServiceTokenWhoAmI(serviceToken string) (ServiceTokenWhoAmIResponse, error) {
+	var response ServiceTokenWhoAmIResponse
+	if err := c.getJSON("/auth/service-token/whoami", &response, serviceToken); err != nil {
+		return ServiceTokenWhoAmIResponse{}, err
 	}
 	return response, nil
 }

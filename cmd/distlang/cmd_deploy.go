@@ -2,13 +2,17 @@ package main
 
 import (
 	"bufio"
+	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
+	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/distlanglabs/distlang/pkg/artifacts"
 	"github.com/distlanglabs/distlang/pkg/auth"
@@ -19,6 +23,18 @@ import (
 )
 
 func runDeploy(args []string) int {
+	if len(args) >= 1 && args[0] == "debug" {
+		if len(args) >= 2 && (args[1] == "--help" || args[1] == "-h") {
+			commandHelpDeployDebug()
+			return 0
+		}
+		if len(args) != 2 {
+			fmt.Fprintln(os.Stderr, "Usage: distlang deploy debug <file>")
+			return 1
+		}
+		return runDeployDebug(args[1])
+	}
+
 	if len(args) >= 1 && (args[0] == "--help" || args[0] == "-h") {
 		commandHelpDeploy()
 		return 0
@@ -105,6 +121,124 @@ func runHostedDeploy(filePath string) int {
 		return 1
 	}
 	fmt.Printf("Hosted deploy succeeded\n- app: %s\n- script: %s\n- hostname: %s\n- url: %s\n", response.Deployment.App, response.Deployment.ScriptName, response.Deployment.Hostname, response.Deployment.URL)
+	return 0
+}
+
+func runDeployDebug(filePath string) int {
+	absFilePath, err := filepath.Abs(filePath)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "deploy debug failed: resolve file path: %v\n", err)
+		return 1
+	}
+
+	appName := inferredAppName(absFilePath)
+	fmt.Println("Deploy debug")
+	fmt.Printf("- file: %s\n", absFilePath)
+	fmt.Printf("- app: %s\n", appName)
+
+	fmt.Println("\nBuild")
+	v8Out, err := backend.BuildV8(absFilePath)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "deploy debug failed: build v8 backend: %v\n", err)
+		return 1
+	}
+	workerMode := "single"
+	if len(v8Out.Workers) > 0 {
+		workerMode = fmt.Sprintf("multi (%d workers)", len(v8Out.Workers))
+	}
+	fmt.Printf("- backend: v8\n")
+	fmt.Printf("- workers: %s\n", workerMode)
+	fmt.Printf("- emitted bytes: %d\n", len(v8Out.Emitted))
+	if len(v8Out.Workers) > 0 {
+		fmt.Println("\nResult")
+		fmt.Println("- hosted deploy is not ready")
+		fmt.Println("- reason: hosted Distlang deploy currently supports single-worker apps only")
+		return 1
+	}
+
+	authClient := auth.NewClient(auth.ResolveBaseURL())
+	session, err := authClient.EnsureSession()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "deploy debug failed: hosted deploy requires login: %v\n", err)
+		return 1
+	}
+	whoami, err := authClient.WhoAmI(session.AccessToken)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "deploy debug failed: auth whoami: %v\n", err)
+		return 1
+	}
+
+	fmt.Println("\nSession")
+	fmt.Printf("- auth base: %s\n", auth.ResolveBaseURL())
+	fmt.Printf("- user: %s <%s>\n", whoami.User.Name, whoami.User.Email)
+	fmt.Printf("- user id: %s\n", whoami.User.ID)
+	fmt.Printf("- expires: %s\n", session.ExpiresAt.UTC().Format(time.RFC3339))
+
+	serviceTokenResponse, err := authClient.ServiceToken(session.AccessToken, "objectdb", false)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "deploy debug failed: fetch service token: %v\n", err)
+		return 1
+	}
+	serviceToken := strings.TrimSpace(serviceTokenResponse.AccessToken)
+	fmt.Println("\nService token")
+	fmt.Printf("- mint: ok\n")
+	fmt.Printf("- kind: %s\n", describeTokenKind(serviceToken))
+	fmt.Printf("- token: %s\n", redactToken(serviceToken))
+	fmt.Printf("- length: %d\n", len(serviceToken))
+
+	tokenWhoAmI, err := authClient.ServiceTokenWhoAmI(serviceToken)
+	if err != nil {
+		fmt.Println("\nService token whoami")
+		fmt.Printf("- status: failed\n")
+		fmt.Printf("- error: %v\n", err)
+		fmt.Println("\nResult")
+		fmt.Println("- hosted deploy is not ready")
+		return 1
+	}
+	fmt.Println("\nService token whoami")
+	fmt.Printf("- status: ok\n")
+	fmt.Printf("- user: %s <%s>\n", tokenWhoAmI.User.Name, tokenWhoAmI.User.Email)
+	fmt.Printf("- service: %s\n", tokenWhoAmI.Token.Service)
+	fmt.Printf("- scope: %s\n", tokenWhoAmI.Token.Scope)
+
+	storeClient := store.NewClient(store.ResolveBaseURL())
+	status, err := storeClient.ObjectDBStatus(serviceToken)
+	if err != nil {
+		fmt.Println("\nStore auth with service token")
+		fmt.Printf("- base: %s\n", storeClient.BaseURL())
+		fmt.Printf("- status: failed\n")
+		fmt.Printf("- error: %v\n", err)
+		fmt.Println("\nResult")
+		fmt.Println("- hosted deploy is not ready")
+		return 1
+	}
+
+	fmt.Println("\nStore auth with service token")
+	fmt.Printf("- base: %s\n", storeClient.BaseURL())
+	fmt.Printf("- status: ok\n")
+	fmt.Printf("- service: %s %s\n", status.Service, status.Version)
+	fmt.Printf("- user: %s <%s>\n", status.User.Name, status.User.Email)
+
+	listReq, err := newDeploymentsListRequest(session.AccessToken)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "deploy debug failed: %v\n", err)
+		return 1
+	}
+	listRes, err := deployClientDebugDo(listReq)
+	if err != nil {
+		fmt.Println("\nDeployments API")
+		fmt.Printf("- status: failed\n")
+		fmt.Printf("- error: %v\n", err)
+		fmt.Println("\nResult")
+		fmt.Println("- hosted deploy is not ready")
+		return 1
+	}
+	fmt.Println("\nDeployments API")
+	fmt.Printf("- status: ok\n")
+	fmt.Printf("- deployments visible: %d\n", listRes)
+
+	fmt.Println("\nResult")
+	fmt.Println("- hosted deploy debug checks passed")
 	return 0
 }
 
@@ -248,6 +382,51 @@ func resolveHelpersServiceToken(deployEnv map[string]string) (string, error) {
 		return "", fmt.Errorf("fetch service token: %w", err)
 	}
 	return strings.TrimSpace(serviceToken.AccessToken), nil
+}
+
+func describeTokenKind(token string) string {
+	if strings.HasPrefix(token, "dsts_") {
+		return "opaque service token"
+	}
+	if strings.Count(token, ".") == 2 {
+		return "jwt"
+	}
+	return "unknown"
+}
+
+func redactToken(token string) string {
+	if len(token) <= 18 {
+		return token
+	}
+	return token[:12] + "..." + token[len(token)-6:]
+}
+
+func newDeploymentsListRequest(accessToken string) (*http.Request, error) {
+	req, err := http.NewRequest("GET", strings.TrimRight(store.ResolveBaseURL(), "/")+"/deployments/v1", nil)
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("Authorization", "Bearer "+accessToken)
+	return req, nil
+}
+
+func deployClientDebugDo(req *http.Request) (int, error) {
+	res, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return 0, err
+	}
+	defer res.Body.Close()
+	if res.StatusCode < 200 || res.StatusCode >= 300 {
+		body, _ := io.ReadAll(io.LimitReader(res.Body, 1<<20))
+		return 0, fmt.Errorf("deployments request failed (%s): %s", res.Status, strings.TrimSpace(string(body)))
+	}
+	var payload struct {
+		Deployments []json.RawMessage `json:"deployments"`
+	}
+	if err := json.NewDecoder(res.Body).Decode(&payload); err != nil {
+		return 0, err
+	}
+	return len(payload.Deployments), nil
 }
 
 func putWranglerSecret(dir string, env map[string]string, key, value string) error {
