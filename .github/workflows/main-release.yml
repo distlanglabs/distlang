@@ -28,7 +28,7 @@ jobs:
         run: go mod download
 
       - name: Build main assets
-        run: make checksums
+        run: make checksums VERSION=main COMMIT=${GITHUB_SHA::7}
 
       - name: Move rolling main tag
         run: |
