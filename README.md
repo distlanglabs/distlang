@@ -100,7 +100,7 @@ Hosted deploys currently:
 - infer the app name from the parent directory
 - support single-worker apps first
 - publish into Distlang-managed Cloudflare hosting
-- return a hosted URL like `https://echo-georg-a1b2c3.apps.distlang.com`
+- return a hosted URL like `https://echo-georg-a1b2c3.distlang.com`
 
 Deploy directly to your own Cloudflare account:
 ```bash
