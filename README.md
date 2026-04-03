@@ -6,9 +6,14 @@ API docs: [api.distlang.com/docs](https://api.distlang.com/docs)
 
 ## Install
 
-Linux/macOS:
+Stable release (Linux/macOS):
 ```bash
 curl -fsSL https://distlang.com/install | bash
+```
+
+Latest from `main` for testing (Linux/macOS):
+```bash
+curl -fsSL https://distlang.com/install-main | bash
 ```
 
 Windows PowerShell:
@@ -18,7 +23,7 @@ irm https://distlang.com/install.ps1 | iex
 
 Verify install:
 ```bash
-distlang --help
+distlang --version
 ```
 
 By default the installer places `distlang` in a user-local bin directory (`~/.local/bin` on Linux/macOS, `%LOCALAPPDATA%\distlang\bin` on Windows).
@@ -48,33 +53,79 @@ distlang will need to be split into two
 
 ## Quick Start
 ```bash
-# build the CLI
-go build -o ./bin/distlang ./cmd/distlang
+# install the CLI
+curl -fsSL https://distlang.com/install | bash
 
-# or use make
-make build
+# or test the latest main build
+curl -fsSL https://distlang.com/install-main | bash
 
-# run from the example directory (default port 5656)
-cd examples/helloworld
-make run
-# then open http://127.0.0.1:5656
+# build an app
+distlang build examples/app-echo/index.js
 
-# inspect compiler passes
-make debug
+# run it locally (default port 5656)
+distlang run examples/app-echo/index.js
+
+# deploy it through Distlang hosting
+distlang deploy examples/app-echo/index.js
 ```
 
 ## Commands
-- `build <file>`: build backend artifacts (`v8`) and Cloudflare provider packaging into `dist/`.
+- `build <file>`: build backend artifacts (`v8`) and provider packaging into `dist/`.
 - `target init [--target=cloudflare] [--path=.]`: scaffold target files (including local env template) for a project/example.
-- `deploy <file> [--target=cloudflare]`: build and deploy to a target platform (cloudflare for now).
+- `deploy <file> [--target=distlang|cloudflare]`: deploy through Distlang hosting by default, or directly to Cloudflare with `--target=cloudflare`.
 - `helpers <login|store|whoami|logout>`: manage the Distlang helper auth session and authenticated store access.
 - `run <file> [--v8-port=N]`: build the V8 backend, then start local workerd.
 - `debug <build|run> <file> [--passes=...]`: print pass outputs (`parse`, `ir`, `emit`); `debug run` now points you to `distlang run`.
+
+## Build And Deploy Apps
+
+Build an app locally:
+```bash
+distlang build path/to/index.js
+```
+
+This writes generated output into the app directory, including `dist/` and `generated/`.
+
+Run an app locally:
+```bash
+distlang run path/to/index.js
+```
+
+Deploy an app through Distlang hosting:
+```bash
+distlang deploy path/to/index.js
+```
+
+Hosted deploys currently:
+- infer the app name from the parent directory
+- support single-worker apps first
+- publish into Distlang-managed Cloudflare hosting
+- return a hosted URL like `https://echo-georg-a1b2c3.apps.distlang.com`
+
+Deploy directly to your own Cloudflare account:
+```bash
+distlang deploy path/to/index.js --target=cloudflare
+```
+
+That direct-provider path still expects Cloudflare credentials and target config.
 
 ## Releases and CI Artifacts
 
 ### Release assets (public + stable)
 Tagging a release (for example `v0.1.0`) triggers `.github/workflows/release.yml` and publishes cross-platform binaries to GitHub Releases.
+
+### Rolling `main` assets (public + prerelease)
+Pushes to `main` trigger `.github/workflows/main-release.yml` and update a rolling prerelease named `main`.
+
+This powers:
+```bash
+curl -fsSL https://distlang.com/install-main | bash
+```
+
+Main-channel binaries identify themselves clearly, for example:
+```bash
+distlang main (985e910)
+```
 
 Download the latest Linux AMD64 build:
 ```bash
@@ -162,18 +213,19 @@ make run
 
 Build artifacts (v8 + cloudflare package):
 ```bash
-cd examples/helloworld
+cd examples/app-echo
 make build
 # outputs summary and writes dist/ in the example directory
+```
 
-# Cloudflare Makefile helpers
-make -C dist/cloudflare run      # wrangler dev
-make -C dist/cloudflare publish  # wrangler deploy
+Deploy the example through Distlang hosting:
+```bash
+distlang deploy examples/app-echo/index.js
+```
 
-# Distlang deploy helper (requires credentials)
-../../bin/distlang target init --target=cloudflare --path=.
-# then set values in targets/cloudflare/cloudflare.env
-make deploy
+Deploy directly to Cloudflare instead:
+```bash
+distlang deploy examples/app-echo/index.js --target=cloudflare
 ```
 
 ## Known Limitations
