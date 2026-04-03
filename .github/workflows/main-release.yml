@@ -1,0 +1,49 @@
+name: Main Release
+
+on:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - name: Setup Go
+        uses: actions/setup-go@v6
+        with:
+          go-version: "1.21.x"
+          cache: true
+
+      - name: Download modules
+        run: go mod download
+
+      - name: Build main assets
+        run: make checksums
+
+      - name: Move rolling main tag
+        run: |
+          git tag -f main "$GITHUB_SHA"
+          git push origin refs/tags/main --force
+
+      - name: Publish rolling main prerelease
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: main
+          name: main
+          prerelease: true
+          generate_release_notes: false
+          overwrite_files: true
+          files: |
+            dist/release/assets/*.tar.gz
+            dist/release/assets/*.zip
+            dist/release/assets/checksums.txt
