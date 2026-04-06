@@ -2,11 +2,8 @@ package main
 
 import (
 	"bufio"
-	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
-	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -23,6 +20,30 @@ import (
 )
 
 func runDeploy(args []string) int {
+	if len(args) >= 1 && args[0] == "list" {
+		if len(args) >= 2 && (args[1] == "--help" || args[1] == "-h") {
+			commandHelpDeployList()
+			return 0
+		}
+		if len(args) != 1 {
+			fmt.Fprintln(os.Stderr, "Usage: distlang deploy list")
+			return 1
+		}
+		return runDeployList()
+	}
+
+	if len(args) >= 1 && args[0] == "delete" {
+		if len(args) >= 2 && (args[1] == "--help" || args[1] == "-h") {
+			commandHelpDeployDelete()
+			return 0
+		}
+		if len(args) != 2 {
+			fmt.Fprintln(os.Stderr, "Usage: distlang deploy delete <deployment-id>")
+			return 1
+		}
+		return runDeployDelete(args[1])
+	}
+
 	if len(args) >= 1 && args[0] == "debug" {
 		if len(args) >= 2 && (args[1] == "--help" || args[1] == "-h") {
 			commandHelpDeployDebug()
@@ -125,6 +146,60 @@ func runHostedDeploy(filePath string) int {
 	return 0
 }
 
+func runDeployList() int {
+	authClient := auth.NewClient(auth.ResolveBaseURL())
+	session, err := authClient.EnsureSession()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "deploy list failed: hosted deploy requires login: %v\n", err)
+		return 1
+	}
+
+	client := deployclient.New(store.ResolveBaseURL())
+	deployments, err := client.ListDeployments(session.AccessToken)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "deploy list failed: %v\n", err)
+		return 1
+	}
+	if len(deployments) == 0 {
+		fmt.Println("No deployments found.")
+		return 0
+	}
+
+	for i, deployment := range deployments {
+		if i > 0 {
+			fmt.Println()
+		}
+		fmt.Println(deployment.ID)
+		fmt.Printf("  app: %s\n", deployment.App)
+		fmt.Printf("  hostname: %s\n", deployment.Hostname)
+		fmt.Printf("  url: %s\n", deployment.URL)
+		fmt.Printf("  status: %s\n", deployment.Status)
+		fmt.Printf("  updated: %s\n", deployment.UpdatedAt)
+		if len(deployment.MetricsBuckets) > 0 {
+			fmt.Printf("  metrics buckets: %s\n", strings.Join(deployment.MetricsBuckets, ", "))
+		}
+	}
+	return 0
+}
+
+func runDeployDelete(deploymentID string) int {
+	authClient := auth.NewClient(auth.ResolveBaseURL())
+	session, err := authClient.EnsureSession()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "deploy delete failed: hosted deploy requires login: %v\n", err)
+		return 1
+	}
+
+	client := deployclient.New(store.ResolveBaseURL())
+	if err := client.DeleteDeployment(session.AccessToken, deploymentID); err != nil {
+		fmt.Fprintf(os.Stderr, "deploy delete failed: %v\n", err)
+		return 1
+	}
+
+	fmt.Printf("Deleted deployment %s\n", strings.TrimSpace(deploymentID))
+	return 0
+}
+
 func runDeployDebug(filePath string) int {
 	absFilePath, err := filepath.Abs(filePath)
 	if err != nil {
@@ -220,12 +295,8 @@ func runDeployDebug(filePath string) int {
 	fmt.Printf("- service: %s %s\n", status.Service, status.Version)
 	fmt.Printf("- user: %s <%s>\n", status.User.Name, status.User.Email)
 
-	listReq, err := newDeploymentsListRequest(session.AccessToken)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "deploy debug failed: %v\n", err)
-		return 1
-	}
-	listRes, err := deployClientDebugDo(listReq)
+	deploymentsClient := deployclient.New(store.ResolveBaseURL())
+	deployments, err := deploymentsClient.ListDeployments(session.AccessToken)
 	if err != nil {
 		fmt.Println("\nDeployments API")
 		fmt.Printf("- status: failed\n")
@@ -236,7 +307,7 @@ func runDeployDebug(filePath string) int {
 	}
 	fmt.Println("\nDeployments API")
 	fmt.Printf("- status: ok\n")
-	fmt.Printf("- deployments visible: %d\n", listRes)
+	fmt.Printf("- deployments visible: %d\n", len(deployments))
 
 	fmt.Println("\nResult")
 	fmt.Println("- hosted deploy debug checks passed")
@@ -547,34 +618,6 @@ func trimQuotedString(s string) (string, bool) {
 		return "", false
 	}
 	return trimmed[1 : len(trimmed)-1], true
-}
-
-func newDeploymentsListRequest(accessToken string) (*http.Request, error) {
-	req, err := http.NewRequest("GET", strings.TrimRight(store.ResolveBaseURL(), "/")+"/deployments/v1", nil)
-	if err != nil {
-		return nil, err
-	}
-	req.Header.Set("Authorization", "Bearer "+accessToken)
-	return req, nil
-}
-
-func deployClientDebugDo(req *http.Request) (int, error) {
-	res, err := http.DefaultClient.Do(req)
-	if err != nil {
-		return 0, err
-	}
-	defer res.Body.Close()
-	if res.StatusCode < 200 || res.StatusCode >= 300 {
-		body, _ := io.ReadAll(io.LimitReader(res.Body, 1<<20))
-		return 0, fmt.Errorf("deployments request failed (%s): %s", res.Status, strings.TrimSpace(string(body)))
-	}
-	var payload struct {
-		Deployments []json.RawMessage `json:"deployments"`
-	}
-	if err := json.NewDecoder(res.Body).Decode(&payload); err != nil {
-		return 0, err
-	}
-	return len(payload.Deployments), nil
 }
 
 func putWranglerSecret(dir string, env map[string]string, key, value string) error {

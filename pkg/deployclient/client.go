@@ -46,6 +46,11 @@ type CreateDeploymentResponse struct {
 	Deployment DeploymentRecord `json:"deployment"`
 }
 
+type ListDeploymentsResponse struct {
+	OK          bool               `json:"ok"`
+	Deployments []DeploymentRecord `json:"deployments"`
+}
+
 func New(baseURL string) *Client {
 	baseURL = strings.TrimRight(strings.TrimSpace(baseURL), "/")
 	return &Client{
@@ -100,4 +105,71 @@ func (c *Client) CreateDeployment(accessToken string, request CreateDeploymentRe
 		return CreateDeploymentResponse{}, err
 	}
 	return response, nil
+}
+
+func (c *Client) ListDeployments(accessToken string) ([]DeploymentRecord, error) {
+	req, err := http.NewRequest(http.MethodGet, c.baseURL+"/deployments/v1", nil)
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("Authorization", "Bearer "+accessToken)
+
+	var response ListDeploymentsResponse
+	if err := c.doJSON(req, &response, "deployments request failed"); err != nil {
+		return nil, err
+	}
+	return response.Deployments, nil
+}
+
+func (c *Client) DeleteDeployment(accessToken string, deploymentID string) error {
+	deploymentID = strings.TrimSpace(deploymentID)
+	if deploymentID == "" {
+		return fmt.Errorf("deployment id is required")
+	}
+
+	req, err := http.NewRequest(http.MethodDelete, c.baseURL+"/deployments/v1/"+deploymentID, nil)
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Authorization", "Bearer "+accessToken)
+
+	return c.doJSON(req, nil, "delete deployment failed")
+}
+
+func (c *Client) doJSON(req *http.Request, out any, errorPrefix string) error {
+	res, err := c.httpClient.Do(req)
+	if err != nil {
+		return err
+	}
+	defer res.Body.Close()
+
+	body, err := io.ReadAll(io.LimitReader(res.Body, 1<<20))
+	if err != nil {
+		return err
+	}
+	if res.StatusCode < 200 || res.StatusCode >= 300 {
+		message := strings.TrimSpace(string(body))
+		var errPayload struct {
+			Error   string `json:"error"`
+			Message string `json:"message"`
+		}
+		if json.Unmarshal(body, &errPayload) == nil {
+			if errPayload.Message != "" {
+				message = errPayload.Message
+			} else if errPayload.Error != "" {
+				message = errPayload.Error
+			}
+		}
+		if message == "" {
+			message = res.Status
+		}
+		return fmt.Errorf("%s (%s): %s", errorPrefix, res.Status, message)
+	}
+	if out == nil || len(body) == 0 {
+		return nil
+	}
+	if err := json.Unmarshal(body, out); err != nil {
+		return err
+	}
+	return nil
 }
