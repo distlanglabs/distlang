@@ -7,7 +7,7 @@ const mockBuckets = new Set();
 const mockMetricsBuckets = new Set();
 const mockMetricsRows = new Map();
 const metricsStates = new Set();
-const metricsWindowMs = 30 * 1000;
+const metricsWindowMs = 1 * 1000;
 
 export function wrapWorkerWithHelpers(worker) {
   return {

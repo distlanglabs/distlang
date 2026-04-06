@@ -21,7 +21,7 @@ import {
 import { liveConfig, queueWithContext } from "./shared.js";
 
 const metricsStates = new Set();
-const metricsWindowMs = 30 * 1000;
+const metricsWindowMs = 1 * 1000;
 
 export const helpersMetrics = {
   async query(query, options = {}) {
