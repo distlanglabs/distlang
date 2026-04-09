@@ -25,6 +25,17 @@ export function envString(key) {
   return value.trim();
 }
 
+export function envService(key) {
+  if (!runtimeState.currentEnv) {
+    return null;
+  }
+  const value = runtimeState.currentEnv[key];
+  if (!value || typeof value.fetch !== "function") {
+    return null;
+  }
+  return value;
+}
+
 export function helpersMode() {
   const mode = envString("DISTLANG_HELPERS_MODE").toLowerCase();
   if (mode === "mock" || mode === "live") {
@@ -37,6 +48,7 @@ export function liveConfig(errorPrefix) {
   const mode = helpersMode();
   const token = envString("DISTLANG_SERVICE_TOKEN");
   const baseURL = (envString("DISTLANG_STORE_BASE_URL") || defaultStoreBaseURL).replace(/\/$/, "");
+  const service = envService("DISTLANG_STORE");
   const shouldUseLive = mode === "live" || (mode === "auto" && token !== "");
 
   if (!shouldUseLive) {
@@ -46,7 +58,7 @@ export function liveConfig(errorPrefix) {
     throw new Error(`${errorPrefix} requires DISTLANG_SERVICE_TOKEN in live mode`);
   }
 
-  return { live: true, token, baseURL };
+  return { live: true, token, baseURL, service };
 }
 
 export function encodePathPart(value) {
@@ -97,11 +109,12 @@ export async function requestJSON(method, path, cfg, options = {}) {
     Authorization: `Bearer ${cfg.token}`,
     ...options.headers,
   };
-  const res = await fetch(url.toString(), {
+  const request = new Request(url.toString(), {
     method,
     headers,
     body: options.body,
   });
+  const res = cfg.service ? await cfg.service.fetch(request) : await fetch(request);
 
   if (res.status === 404 && options.allowNotFound) {
     return null;

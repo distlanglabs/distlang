@@ -99,13 +99,13 @@ export function mockMetricsMetadataQuery(options = {}) {
       if (!Array.isArray(data[name])) {
         data[name] = [];
       }
-      data[name].push({
-        type: definition.kind,
-        help: definition.description,
-        unit: definition.unit,
+        data[name].push({
+          type: definition.kind,
+          help: definition.description,
+          unit: definition.unit,
           metricSet,
-        labels: (definition.labels || []).join(","),
-      });
+          labels: (definition.labels || []).join(","),
+        });
     }
   }
   return { status: "success", data };
