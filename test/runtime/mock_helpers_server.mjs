@@ -73,9 +73,9 @@ export async function startMockHelpersServer(options = {}) {
         service: "metrics",
         version: "mock",
         routes: {
-          buckets: "/metrics/v1/buckets/:bucket",
-          metadata: "/metrics/v1/buckets/:bucket/metadata",
-          rows: "/metrics/v1/buckets/:bucket/rows",
+          metricSets: "/metrics/v1/metricsets/:metricSet",
+          metadata: "/metrics/v1/metricsets/:metricSet/metadata",
+          rows: "/metrics/v1/metricsets/:metricSet/rows",
           query: "/metrics/v1/api/v1/query",
           query_range: "/metrics/v1/api/v1/query_range",
         },
@@ -176,42 +176,42 @@ export async function startMockHelpersServer(options = {}) {
       return;
     }
 
-    const metricsBucketMatch = url.pathname.match(/^\/metrics\/v1\/buckets\/([^/]+)$/);
+    const metricsBucketMatch = url.pathname.match(/^\/metrics\/v1\/metricsets\/([^/]+)$/);
     if (metricsBucketMatch && req.method === "PUT") {
-      const bucket = decodeURIComponent(metricsBucketMatch[1]);
-      const created = !metricsBuckets.has(bucket);
-      metricsBuckets.add(bucket);
-      if (!metricsRows.has(bucket)) {
-        metricsRows.set(bucket, []);
+      const metricSet = decodeURIComponent(metricsBucketMatch[1]);
+      const created = !metricsBuckets.has(metricSet);
+      metricsBuckets.add(metricSet);
+      if (!metricsRows.has(metricSet)) {
+        metricsRows.set(metricSet, []);
       }
-      json(res, 200, { ok: true, bucket, created });
+      json(res, 200, { ok: true, metricSet, created });
       return;
     }
 
-    const metricsMetadataMatch = url.pathname.match(/^\/metrics\/v1\/buckets\/([^/]+)\/metadata$/);
+    const metricsMetadataMatch = url.pathname.match(/^\/metrics\/v1\/metricsets\/([^/]+)\/metadata$/);
     if (metricsMetadataMatch && req.method === "PUT") {
-      const bucket = decodeURIComponent(metricsMetadataMatch[1]);
+      const metricSet = decodeURIComponent(metricsMetadataMatch[1]);
       const raw = await parseBody(req);
       const body = raw.length === 0 ? {} : JSON.parse(raw.toString("utf8"));
-      metricsMetadata.set(bucket, body.metrics || {});
-      json(res, 200, { ok: true, bucket, metrics: body.metrics || {} });
+      metricsMetadata.set(metricSet, body.metrics || {});
+      json(res, 200, { ok: true, metricSet, metrics: body.metrics || {} });
       return;
     }
 
-    const metricsRowsMatch = url.pathname.match(/^\/metrics\/v1\/buckets\/([^/]+)\/rows$/);
+    const metricsRowsMatch = url.pathname.match(/^\/metrics\/v1\/metricsets\/([^/]+)\/rows$/);
     if (metricsRowsMatch && req.method === "POST") {
-      const bucket = decodeURIComponent(metricsRowsMatch[1]);
-      if (!metricsBuckets.has(bucket)) {
-        metricsBuckets.add(bucket);
+      const metricSet = decodeURIComponent(metricsRowsMatch[1]);
+      if (!metricsBuckets.has(metricSet)) {
+        metricsBuckets.add(metricSet);
       }
-      if (!metricsRows.has(bucket)) {
-        metricsRows.set(bucket, []);
+      if (!metricsRows.has(metricSet)) {
+        metricsRows.set(metricSet, []);
       }
       const raw = await parseBody(req);
       const body = raw.length === 0 ? {} : JSON.parse(raw.toString("utf8"));
       const rows = Array.isArray(body.rows) ? body.rows : [];
-      metricsRows.get(bucket).push(...rows);
-      json(res, 201, { ok: true, bucket, written: rows.length });
+      metricsRows.get(metricSet).push(...rows);
+      json(res, 201, { ok: true, metricSet, written: rows.length });
       return;
     }
 
@@ -310,9 +310,9 @@ export async function startMockHelpersServer(options = {}) {
 
 function allMetricRows(store) {
   const rows = [];
-  for (const [bucket, bucketRows] of store.entries()) {
-    for (const row of bucketRows) {
-      rows.push({ bucket, row });
+  for (const [metricSet, metricSetRows] of store.entries()) {
+    for (const row of metricSetRows) {
+      rows.push({ metricSet, row });
     }
   }
   return rows;
@@ -354,8 +354,8 @@ function mockMetricsQueryRange(store, query, options = {}) {
 function mockMetricsSeries(store, options = {}) {
   const selectors = Array.isArray(options.match) ? options.match.map(parseSelector) : [];
   const series = new Map();
-  for (const { bucket, row } of allMetricRows(store)) {
-    const labels = rowLabels(bucket, row.data || row);
+  for (const { metricSet, row } of allMetricRows(store)) {
+    const labels = rowLabels(metricSet, row.data || row);
     if (selectors.length > 0 && !selectors.some((selector) => matchesSelector(labels, selector))) {
       continue;
     }
@@ -386,7 +386,7 @@ function mockMetricsLabelValues(store, name, options = {}) {
 
 function mockMetricsMetadata(store, options = {}) {
   const data = {};
-  for (const [bucket, definitions] of store.entries()) {
+  for (const [metricSet, definitions] of store.entries()) {
     for (const [name, definition] of Object.entries(definitions)) {
       if (options.metric && options.metric !== name) {
         continue;
@@ -394,7 +394,7 @@ function mockMetricsMetadata(store, options = {}) {
       if (!Array.isArray(data[name])) {
         data[name] = [];
       }
-      data[name].push({ type: definition.kind, help: definition.description, unit: definition.unit, bucket, labels: (definition.labels || []).join(",") });
+      data[name].push({ type: definition.kind, help: definition.description, unit: definition.unit, metricSet, labels: (definition.labels || []).join(",") });
     }
   }
   return { status: "success", data };
@@ -424,9 +424,9 @@ function parseSelector(rawSelector) {
 
 function groupSeries(store, selector) {
   const grouped = new Map();
-  for (const { bucket, row } of allMetricRows(store)) {
+  for (const { metricSet, row } of allMetricRows(store)) {
     const data = row.data || row;
-    const labels = rowLabels(bucket, data);
+    const labels = rowLabels(metricSet, data);
     if (!matchesSelector(labels, selector)) {
       continue;
     }
@@ -444,8 +444,8 @@ function groupSeries(store, selector) {
   return grouped;
 }
 
-function rowLabels(bucket, data) {
-  return { __name__: data.metric, bucket, ...(data.labels || {}) };
+function rowLabels(metricSet, data) {
+  return { __name__: data.metric, metricSet, ...(data.labels || {}) };
 }
 
 function matchesSelector(labels, selector) {

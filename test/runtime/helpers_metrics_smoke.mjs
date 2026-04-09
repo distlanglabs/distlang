@@ -135,8 +135,8 @@ async function runLiveModeScenario(handlerSet1Worker, handlerSet2Worker) {
 
     const metricsCalls = mockServer.calls.filter((entry) => entry.path.startsWith("/metrics/v1/"));
     assert(metricsCalls.length >= 4, `expected metrics helper calls, got ${JSON.stringify(metricsCalls)}`);
-    assert(metricsCalls.some((entry) => entry.method === "POST" && entry.path.endsWith("/simpleapp-metrics/rows")), "expected metrics row write call");
-    assert(metricsCalls.some((entry) => entry.method === "PUT" && entry.path.includes("/simpleapp-metrics/metadata")), `expected metrics metadata write call, got ${JSON.stringify(metricsCalls)}`);
+    assert(metricsCalls.some((entry) => entry.method === "POST" && entry.path === "/metrics/v1/metricsets/simpleapp-metrics/rows"), "expected metrics row write call");
+    assert(metricsCalls.some((entry) => entry.method === "PUT" && entry.path === "/metrics/v1/metricsets/simpleapp-metrics/metadata"), `expected metrics metadata write call, got ${JSON.stringify(metricsCalls)}`);
 
     const rows = mockServer.analyticsRows.get("simpleapp-metrics") || [];
     assert(rows.length > 0, "expected metrics rows to be written");
