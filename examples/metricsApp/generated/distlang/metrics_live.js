@@ -42,19 +42,19 @@ export async function liveMetricsMetadata(cfg, options = {}) {
   });
 }
 
-export async function ensureLiveMetricsBucket(cfg, bucket, definitions) {
-  await requestJSON("PUT", `/metrics/v1/buckets/${encodePathPart(bucket)}`, cfg, {
+export async function ensureLiveMetricsSet(cfg, metricSet, definitions) {
+  await requestJSON("PUT", `/metrics/v1/metricsets/${encodePathPart(metricSet)}`, cfg, {
     errorPrefix: "helpers.Metrics request",
   });
-  await requestJSON("PUT", `/metrics/v1/buckets/${encodePathPart(bucket)}/metadata`, cfg, {
+  await requestJSON("PUT", `/metrics/v1/metricsets/${encodePathPart(metricSet)}/metadata`, cfg, {
     body: JSON.stringify({ metrics: definitions }),
     headers: { "Content-Type": "application/json" },
     errorPrefix: "helpers.Metrics request",
   });
 }
 
-export async function appendLiveMetricRows(cfg, bucket, rows) {
-  await requestJSON("POST", `/metrics/v1/buckets/${encodePathPart(bucket)}/rows`, cfg, {
+export async function appendLiveMetricRows(cfg, metricSet, rows) {
+  await requestJSON("POST", `/metrics/v1/metricsets/${encodePathPart(metricSet)}/rows`, cfg, {
     body: JSON.stringify({ rows: rows.map((row) => ({ ts: row.windowStart, data: row })) }),
     headers: { "Content-Type": "application/json" },
     errorPrefix: "helpers.Metrics request",

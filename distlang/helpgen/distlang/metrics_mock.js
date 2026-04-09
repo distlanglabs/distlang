@@ -1,19 +1,19 @@
-const mockMetricsBuckets = new Set();
+const mockMetricSets = new Set();
 const mockMetricsRows = new Map();
 const mockMetricsMetadata = new Map();
 
-export function ensureMockMetricsBucket(bucket, definitions) {
-  mockMetricsBuckets.add(bucket);
-  if (!mockMetricsRows.has(bucket)) {
-    mockMetricsRows.set(bucket, []);
+export function ensureMockMetricsSet(metricSet, definitions) {
+  mockMetricSets.add(metricSet);
+  if (!mockMetricsRows.has(metricSet)) {
+    mockMetricsRows.set(metricSet, []);
   }
-  mockMetricsMetadata.set(bucket, definitions);
+  mockMetricsMetadata.set(metricSet, definitions);
 }
 
-export function appendMockMetricRows(bucket, rows) {
-  const stored = mockMetricsRows.get(bucket) || [];
+export function appendMockMetricRows(metricSet, rows) {
+  const stored = mockMetricsRows.get(metricSet) || [];
   stored.push(...rows);
-  mockMetricsRows.set(bucket, stored);
+  mockMetricsRows.set(metricSet, stored);
 }
 
 export function mockMetricsQuery(query, options = {}) {
@@ -57,7 +57,7 @@ export function mockMetricsSeries(options = {}) {
   const selectors = Array.isArray(options.match) ? options.match.map(parseSelector) : [];
   const out = new Map();
   for (const row of rows) {
-    const labels = metricLabels(row.bucket, row.data);
+    const labels = metricLabels(row.metricSet, row.data);
     if (selectors.length > 0 && !selectors.some((selector) => matchesSelector(labels, selector))) {
       continue;
     }
@@ -91,7 +91,7 @@ export function mockMetricsLabelValues(name, options = {}) {
 export function mockMetricsMetadataQuery(options = {}) {
   const metricName = typeof options.metric === "string" ? options.metric.trim() : "";
   const data = {};
-  for (const [bucket, definitions] of mockMetricsMetadata.entries()) {
+  for (const [metricSet, definitions] of mockMetricsMetadata.entries()) {
     for (const [name, definition] of Object.entries(definitions)) {
       if (metricName && metricName !== name) {
         continue;
@@ -99,13 +99,13 @@ export function mockMetricsMetadataQuery(options = {}) {
       if (!Array.isArray(data[name])) {
         data[name] = [];
       }
-      data[name].push({
-        type: definition.kind,
-        help: definition.description,
-        unit: definition.unit,
-        bucket,
-        labels: (definition.labels || []).join(","),
-      });
+        data[name].push({
+          type: definition.kind,
+          help: definition.description,
+          unit: definition.unit,
+          metricSet,
+          labels: (definition.labels || []).join(","),
+        });
     }
   }
   return { status: "success", data };
@@ -113,9 +113,9 @@ export function mockMetricsMetadataQuery(options = {}) {
 
 function allMockMetricRows() {
   const rows = [];
-  for (const [bucket, bucketRows] of mockMetricsRows.entries()) {
-    for (const row of bucketRows) {
-      rows.push({ bucket, data: row });
+  for (const [metricSet, metricSetRows] of mockMetricsRows.entries()) {
+    for (const row of metricSetRows) {
+      rows.push({ metricSet, data: row });
     }
   }
   return rows;
@@ -125,7 +125,7 @@ function buildMockVectorResult(parsed, evalTimeMs) {
   const rows = allMockMetricRows();
   const grouped = new Map();
   for (const row of rows) {
-    const labels = metricLabels(row.bucket, row.data);
+    const labels = metricLabels(row.metricSet, row.data);
     if (!matchesSelector(labels, parsed.selector)) {
       continue;
     }
@@ -231,10 +231,10 @@ function parseSelector(rawSelector) {
   return { metric: match[1], matchers: labels };
 }
 
-function metricLabels(bucket, row) {
+function metricLabels(metricSet, row) {
   return {
     __name__: row.metric,
-    bucket,
+    metricSet,
     ...(row.labels || {}),
   };
 }

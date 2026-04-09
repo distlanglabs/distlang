@@ -1,6 +1,6 @@
 import {
   appendLiveMetricRows,
-  ensureLiveMetricsBucket,
+  ensureLiveMetricsSet,
   liveMetricsLabelValues,
   liveMetricsLabels,
   liveMetricsMetadata,
@@ -10,7 +10,7 @@ import {
 } from "./metrics_live.js";
 import {
   appendMockMetricRows,
-  ensureMockMetricsBucket,
+  ensureMockMetricsSet,
   mockMetricsLabelValues,
   mockMetricsLabels,
   mockMetricsMetadataQuery,
@@ -55,19 +55,19 @@ export const helpersMetrics = {
   },
 };
 
-export function instantiateMetrics(definition, bucketName) {
+export function instantiateMetrics(definition, metricSetName) {
   if (!definition || typeof definition !== "object" || Array.isArray(definition)) {
     throw new Error("helpers.instantiateMetrics: definition must be an object");
   }
 
-  const normalizedBucket = String(bucketName || "").trim();
-  if (normalizedBucket === "") {
-    throw new Error("helpers.instantiateMetrics: bucket name is required");
+  const normalizedMetricSet = String(metricSetName || "").trim();
+  if (normalizedMetricSet === "") {
+    throw new Error("helpers.instantiateMetrics: metricSet name is required");
   }
 
   const instruments = {};
   const state = {
-    bucket: normalizedBucket,
+    metricSet: normalizedMetricSet,
     definitions: normalizeMetricDefinitions(definition),
     buffer: new Map(),
     ensureStarted: false,
@@ -111,7 +111,7 @@ export function instantiateMetrics(definition, bucketName) {
 }
 
 function recordMetric(state, metricName, metricDefinition, value, labelsInput) {
-  ensureMetricsBucket(state);
+  ensureMetricsSet(state);
   const windowStart = windowStartISOString(Date.now());
   const labels = normalizeMetricLabels(metricName, metricDefinition, labelsInput);
   const bufferKey = `${metricName}:${metricDefinition.kind}:${windowStart}:${JSON.stringify(labels)}`;
@@ -140,7 +140,7 @@ function recordMetric(state, metricName, metricDefinition, value, labelsInput) {
   queueMetricsFlush(state, { flushCurrentWindow: false });
 }
 
-function ensureMetricsBucket(state) {
+function ensureMetricsSet(state) {
   if (state.ensureStarted) {
     return;
   }
@@ -148,12 +148,12 @@ function ensureMetricsBucket(state) {
 
   const cfg = liveConfig("helpers.instantiateMetrics");
   if (!cfg.live) {
-    ensureMockMetricsBucket(state.bucket, state.definitions);
+    ensureMockMetricsSet(state.metricSet, state.definitions);
     state.ensurePromise = Promise.resolve();
     return;
   }
 
-  state.ensurePromise = ensureLiveMetricsBucket(cfg, state.bucket, state.definitions);
+  state.ensurePromise = ensureLiveMetricsSet(cfg, state.metricSet, state.definitions);
   queueWithContext(state.ensurePromise);
 }
 
@@ -167,11 +167,11 @@ function queueMetricsFlush(state, options = {}) {
 
     const cfg = liveConfig("helpers.instantiateMetrics");
     if (!cfg.live) {
-      appendMockMetricRows(state.bucket, rows);
+      appendMockMetricRows(state.metricSet, rows);
       return;
     }
 
-    await appendLiveMetricRows(cfg, state.bucket, rows);
+    await appendLiveMetricRows(cfg, state.metricSet, rows);
   });
 
   queueWithContext(state.flushPromise);
