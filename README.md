@@ -28,26 +28,6 @@ distlang --version
 
 By default the installer places `distlang` in a user-local bin directory (`~/.local/bin` on Linux/macOS, `%LOCALAPPDATA%\distlang\bin` on Windows).
 
-# Plan
-
-distlang will need to be split into two
-
-1. distlang-js
-   >> What is current right now. 
-   >> Add support for db in the helloWorld program.
-      For Cloudflare add support for KV. So in code they could write import distlang/core and then we will load the code to read the KV and write to KV.
-      CRUD methods for a generic DB maybe call distlang.InMemDB.<crud>
-      While building it should add the code for the KV Cruds for now. 
-   >> Add support for metrics in the helloWorld program.
-2. distlang-wasm
-  >> The wasm support will exist here. 
-
-## Current Status (Phase 0 POC)
-- Go CLI with a JavaScript worker build path and Cloudflare packaging.
-- ESM is transformed into backend-ready JS via esbuild-based passes.
-- `run` launches the local workerd runtime.
-- Commands: `build`, `target`, `deploy`, `helpers`, `run`, `debug`.
-
 ## Requirements
 - Go 1.21+
 
@@ -69,6 +49,46 @@ distlang run examples/app-echo/index.js
 distlang deploy examples/app-echo/index.js
 ```
 
+## High-Level Overview
+
+`distlang` is a Go CLI for building JavaScript worker apps into runnable and deployable distributed services.
+
+- It compiles app source into backend-ready V8 worker code.
+- It generates helper modules when apps import `distlang/core`, `distlang`, `distlang/app`, or `distlang/layers`.
+- It runs workers locally with `workerd`.
+- It packages apps for Cloudflare and can also deploy through Distlang-managed hosting.
+
+```text
+app source (index.js)
+        |
+        v
+distlang CLI
+(build / run / deploy / debug)
+        |
+        v
+compile pipeline
+source -> parse/bundle -> emitted JS
+        |
+        +--> generated helper modules
+        |
+        v
+V8 worker output
+        |
+        +--> local run with workerd
+        +--> Cloudflare package in dist/cloudflare/
+        +--> hosted Distlang deploy
+```
+
+## How It Works Here
+
+The current repo is a Phase 0 POC with a JavaScript worker build path and Cloudflare-first packaging.
+
+- Plain worker apps can import `distlang/core` to get storage helpers like `InMemDB`, which use memory locally and Cloudflare KV when available.
+- Higher-level apps can use `distlang/app` to define routes, state, DBs, and observability in a more structured app shape.
+- `build` writes generated output into the app directory, including `dist/` and `generated/`.
+- `run` builds the V8 backend and launches it locally through `workerd`.
+- `deploy` targets Distlang hosting by default, or direct Cloudflare deployment with `--target=cloudflare`.
+
 ## Commands
 - `build <file>`: build backend artifacts (`v8`) and provider packaging into `dist/`.
 - `target init [--target=cloudflare] [--path=.]`: scaffold target files (including local env template) for a project/example.
@@ -79,22 +99,7 @@ distlang deploy examples/app-echo/index.js
 
 ## Build And Deploy Apps
 
-Build an app locally:
-```bash
-distlang build path/to/index.js
-```
-
-This writes generated output into the app directory, including `dist/` and `generated/`.
-
-Run an app locally:
-```bash
-distlang run path/to/index.js
-```
-
-Deploy an app through Distlang hosting:
-```bash
-distlang deploy path/to/index.js
-```
+Build artifacts include backend output in `dist/` and any generated distlang helper code in `generated/`.
 
 Hosted deploys currently:
 - infer the app name from the parent directory
