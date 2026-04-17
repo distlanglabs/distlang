@@ -4,8 +4,10 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net/url"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 )
 
@@ -20,15 +22,19 @@ type Session struct {
 }
 
 func SessionPath() (string, error) {
+	return sessionPathForBaseURL(ResolveBaseURL())
+}
+
+func sessionPathForBaseURL(baseURL string) (string, error) {
 	configDir, err := os.UserConfigDir()
 	if err != nil {
 		return "", fmt.Errorf("resolve user config dir: %w", err)
 	}
-	return filepath.Join(configDir, "distlang", "auth.json"), nil
+	return filepath.Join(configDir, "distlang", sessionFileName(baseURL)), nil
 }
 
 func LoadSession() (Session, error) {
-	path, err := SessionPath()
+	path, err := sessionPathForBaseURL(ResolveBaseURL())
 	if err != nil {
 		return Session{}, err
 	}
@@ -52,12 +58,12 @@ func LoadSession() (Session, error) {
 }
 
 func SaveSession(session Session) error {
-	path, err := SessionPath()
-	if err != nil {
-		return err
-	}
 	if session.AuthBaseURL == "" {
 		session.AuthBaseURL = ResolveBaseURL()
+	}
+	path, err := sessionPathForBaseURL(session.AuthBaseURL)
+	if err != nil {
+		return err
 	}
 
 	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
@@ -76,7 +82,7 @@ func SaveSession(session Session) error {
 }
 
 func ClearSession() error {
-	path, err := SessionPath()
+	path, err := sessionPathForBaseURL(ResolveBaseURL())
 	if err != nil {
 		return err
 	}
@@ -84,6 +90,16 @@ func ClearSession() error {
 		return fmt.Errorf("clear session: %w", err)
 	}
 	return nil
+}
+
+func sessionFileName(baseURL string) string {
+	parsed, err := url.Parse(strings.TrimSpace(baseURL))
+	if err != nil || parsed.Host == "" {
+		return "auth-default.json"
+	}
+	replacer := strings.NewReplacer(":", "-", "/", "-", "\\", "-")
+	host := replacer.Replace(parsed.Host)
+	return fmt.Sprintf("auth-%s.json", host)
 }
 
 func (s Session) NeedsRefresh(now time.Time) bool {

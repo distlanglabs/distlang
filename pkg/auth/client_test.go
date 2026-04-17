@@ -21,6 +21,7 @@ func TestClientEnsureSessionRefreshesAndSaves(t *testing.T) {
 		})
 	}))
 	defer server.Close()
+	t.Setenv("DISTLANG_AUTH_BASE_URL", server.URL)
 
 	if err := SaveSession(Session{
 		AuthBaseURL:  server.URL,

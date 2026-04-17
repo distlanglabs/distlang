@@ -199,8 +199,20 @@ make checksums
 - `distlang helpers store objectdb put|get|head|delete <bucket> <key>`: manage ObjectDB values; `keys` only supports `list`.
 - `distlang helpers whoami`: refreshes the session when needed and prints the current user.
 - `distlang helpers logout`: revokes the remote refresh token and clears the local session.
-- `DISTLANG_AUTH_BASE_URL`: optional auth service override for local testing; defaults to `https://auth.distlang.com`.
-- `DISTLANG_STORE_BASE_URL`: optional store service override for local testing; defaults to `https://api.distlang.com`.
+- `DISTLANG_AUTH_BASE_URL`: optional auth service override for local testing or staging; defaults to `https://auth.distlang.com`.
+- `DISTLANG_STORE_BASE_URL`: optional store service override for local testing or staging; defaults to `https://api.distlang.com`.
+
+### Staging helpers
+
+Use these overrides to talk to staging instead of production:
+
+```bash
+export DISTLANG_AUTH_BASE_URL=https://auth-staging.distlang.com
+export DISTLANG_STORE_BASE_URL=https://api-staging.distlang.com
+distlang helpers login
+```
+
+Helper sessions are stored per auth host, so staging login does not overwrite the production session.
 
 ## Example Worker
 ```js

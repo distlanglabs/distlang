@@ -136,6 +136,7 @@ func commandHelpHelpers() {
 	fmt.Println("Environment:")
 	fmt.Println("  DISTLANG_AUTH_BASE_URL   Override auth service base URL (default: https://auth.distlang.com)")
 	fmt.Println("  DISTLANG_STORE_BASE_URL  Override store API base URL (default: https://api.distlang.com)")
+	fmt.Println("  Example staging values: https://auth-staging.distlang.com and https://api-staging.distlang.com")
 }
 
 func commandHelpHelpersStore() {
@@ -216,7 +217,7 @@ func commandHelpHelpersLogin() {
 	fmt.Println("helpers login - Start browser-based helper login")
 	fmt.Println("Usage: distlang helpers login")
 	fmt.Println("Notes:")
-	fmt.Println("  Opens the browser to Google login, then listens on http://127.0.0.1:8976/callback")
+	fmt.Println("  Opens the browser to Distlang auth, then listens on http://127.0.0.1:8976/callback")
 	fmt.Println("  Stores the resulting session in your user config directory")
 }
 

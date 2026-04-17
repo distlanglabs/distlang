@@ -10,6 +10,7 @@ import (
 
 func TestSessionRoundTrip(t *testing.T) {
 	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	t.Setenv("DISTLANG_AUTH_BASE_URL", "https://auth.example.com")
 	session := Session{
 		AuthBaseURL:  "https://auth.example.com",
 		AccessToken:  "access-token",
@@ -47,7 +48,20 @@ func TestSessionRoundTrip(t *testing.T) {
 	if info.Mode().Perm() != 0o600 {
 		t.Fatalf("expected 0600 permissions, got %o", info.Mode().Perm())
 	}
-	if filepath.Base(path) != "auth.json" {
+	if filepath.Base(path) != "auth-auth.example.com.json" {
+		t.Fatalf("unexpected session path: %s", path)
+	}
+}
+
+func TestSessionPathUsesResolvedBaseURL(t *testing.T) {
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	t.Setenv("DISTLANG_AUTH_BASE_URL", "https://auth-staging.distlang.com")
+
+	path, err := SessionPath()
+	if err != nil {
+		t.Fatalf("SessionPath error: %v", err)
+	}
+	if filepath.Base(path) != "auth-auth-staging.distlang.com.json" {
 		t.Fatalf("unexpected session path: %s", path)
 	}
 }
@@ -62,6 +76,7 @@ func TestLoadSessionMissing(t *testing.T) {
 
 func TestClearSession(t *testing.T) {
 	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	t.Setenv("DISTLANG_AUTH_BASE_URL", "https://auth.distlang.com")
 	if err := SaveSession(Session{AccessToken: "token", RefreshToken: "refresh", ExpiresAt: time.Now().UTC()}); err != nil {
 		t.Fatalf("SaveSession error: %v", err)
 	}
