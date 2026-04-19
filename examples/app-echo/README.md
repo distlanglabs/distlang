@@ -27,6 +27,8 @@ app({
 
 The example records request metrics through `state.observability.AppMetrics` while storing config in `state.dbs.ObjectDB`.
 
+It keeps metrics scalar by default so dashboards stay readable. Add labels only for small, bounded dimensions when you need a split view.
+
 ## Build
 
 From this directory:
