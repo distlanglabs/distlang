@@ -52,7 +52,7 @@ Near-term roadmap work prioritizes helpers and store over broader compiler or pr
 Evidence already in the workspace:
 
 - `distlang` has generated helper modules, ObjectDB and metrics examples, local mock/live flows, hosted deploys, and smoke tests.
-- `metrics-service` already has a concrete public/internal route plan plus external deployment-and-validation tooling for metrics visibility and latency.
+- `do-service` already has a concrete public/internal route plan plus external deployment-and-validation tooling for metrics visibility and latency.
 - `user-auth` already supports CLI login, refresh tokens, and service tokens for store-backed access.
 - `dash` already consumes deployments, ObjectDB, auth, and metrics data in a real UI.
 - `cloudflare-analytics-debug` already exists to inspect Analytics Engine ingestion and query timing.
@@ -77,10 +77,12 @@ Already in place:
 
 Remaining work:
 
+- Create API client distlang-client in js and go to start with.  
+
 - Lock down the stable metrics API and expected app-facing contracts.
 - Harden retention, latency, consistency, and failure semantics.
 - Validate end-to-end metrics visibility with repeated hosted runs and dashboard timing checks.
-- Decide what stays in `store` vs what later moves behind `metrics-service`.
+- Decide what stays in `store` vs what later moves behind `do-service`.
 - Define clear exit criteria for correctness and operational stability.
 
 ### Phase 2 — helpers with or without distlang
