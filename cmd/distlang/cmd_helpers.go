@@ -22,8 +22,12 @@ func runHelpers(args []string) int {
 	subArgs := args[1:]
 
 	switch subcommand {
+	case "auth":
+		return runHelpersAuth(subArgs)
 	case "login":
 		return runHelpersLogin(subArgs)
+	case "request":
+		return runHelpersRequest(subArgs)
 	case "store":
 		return runHelpersStore(subArgs)
 	case "whoami":

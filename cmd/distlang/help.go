@@ -12,7 +12,7 @@ var commands = []commandInfo{
 	{Name: "build", Description: "Build backend artifacts and provider packages", Usage: "distlang build <file>"},
 	{Name: "target", Description: "Manage target setup scaffolding", Usage: "distlang target <subcommand>"},
 	{Name: "deploy", Description: "Deploy to Distlang hosting or a provider", Usage: "distlang deploy <file> [--target=distlang|cloudflare] | distlang deploy <list|delete|debug>"},
-	{Name: "helpers", Description: "Manage Distlang helper auth session and store access", Usage: "distlang helpers <login|serve|store|whoami|logout>"},
+	{Name: "helpers", Description: "Manage Distlang helper auth session and store access", Usage: "distlang helpers <auth|login|request|serve|store|whoami|logout>"},
 	{Name: "run", Description: "Run the local V8 runtime", Usage: "distlang run <file> [--v8-port=N] [--set=all|handlerSet1|handlerSet2] [--port1=N] [--port2=N]"},
 	{Name: "debug", Description: "Inspect compiler passes for build or run", Usage: "distlang debug <build|run> <file> [--passes=parse,ir,emit]"},
 	{Name: "version", Description: "Show distlang version information", Usage: "distlang version"},
@@ -64,10 +64,16 @@ func fullHelp() {
 	commandHelpHelpers()
 	fmt.Println()
 	fmt.Println("---")
+	commandHelpHelpersAuth()
+	fmt.Println()
+	fmt.Println("---")
 	commandHelpHelpersStore()
 	fmt.Println()
 	fmt.Println("---")
 	commandHelpHelpersStoreObjectDB()
+	fmt.Println()
+	fmt.Println("---")
+	commandHelpHelpersRequest()
 	fmt.Println()
 	fmt.Println("---")
 	commandHelpRun()
@@ -126,9 +132,11 @@ func commandHelpTarget() {
 
 func commandHelpHelpers() {
 	fmt.Println("helpers - Manage Distlang helper auth session and store access")
-	fmt.Println("Usage: distlang helpers <login|serve|store|whoami|logout>")
+	fmt.Println("Usage: distlang helpers <auth|login|request|serve|store|whoami|logout>")
 	fmt.Println("Subcommands:")
+	fmt.Println("  auth     Show local helper auth state")
 	fmt.Println("  login    Start browser-based login against Distlang auth")
+	fmt.Println("  request  Make an authenticated public API request")
 	fmt.Println("  serve    Run the local helper mock server")
 	fmt.Println("  store    Access authenticated helper store services")
 	fmt.Println("  whoami   Show the current helper auth user")
@@ -137,6 +145,30 @@ func commandHelpHelpers() {
 	fmt.Println("  DISTLANG_AUTH_BASE_URL   Override auth service base URL (default: https://auth.distlang.com)")
 	fmt.Println("  DISTLANG_STORE_BASE_URL  Override store API base URL (default: https://api.distlang.com)")
 	fmt.Println("  Example staging values: https://auth-staging.distlang.com and https://api-staging.distlang.com")
+}
+
+func commandHelpHelpersAuth() {
+	fmt.Println("helpers auth - Inspect helper auth state")
+	fmt.Println("Usage: distlang helpers auth <status>")
+	fmt.Println("Subcommands:")
+	fmt.Println("  status   Report whether a helper auth session is available")
+}
+
+func commandHelpHelpersAuthStatus() {
+	fmt.Println("helpers auth status - Show current helper auth session state")
+	fmt.Println("Usage: distlang helpers auth status [--json]")
+	fmt.Println("Notes:")
+	fmt.Println("  Uses the saved helper auth session and refreshes it when needed")
+}
+
+func commandHelpHelpersRequest() {
+	fmt.Println("helpers request - Make an authenticated public API request")
+	fmt.Println("Usage: distlang helpers request <METHOD> <PATH_OR_URL> [--body-file=path] [--content-type=type] [--base-url=url] [--json]")
+	fmt.Println("Examples:")
+	fmt.Println("  distlang helpers request GET /ai-debugger/v1/sessions --json")
+	fmt.Println("  distlang helpers request POST /ai-debugger/v1/ingest --body-file=payload.json --content-type=application/json --json")
+	fmt.Println("Notes:")
+	fmt.Println("  Uses the saved helper auth session and injects Authorization: Bearer <token>")
 }
 
 func commandHelpHelpersStore() {

@@ -46,6 +46,12 @@ func main() {
 			commandHelpDeploy()
 		case "helpers":
 			commandHelpHelpers()
+		case "helpers-auth", "helpersauth":
+			commandHelpHelpersAuth()
+		case "helpers-auth-status", "helpersauthstatus":
+			commandHelpHelpersAuthStatus()
+		case "helpers-request", "helpersrequest":
+			commandHelpHelpersRequest()
 		case "helpers-store", "helpersstore":
 			commandHelpHelpersStore()
 		case "helpers-store-objectdb", "helpersstoreobjectdb":

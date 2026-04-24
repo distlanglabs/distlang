@@ -193,6 +193,8 @@ make checksums
 
 ## Helper Auth
 - `distlang helpers login`: opens the browser for Google auth and stores a local session.
+- `distlang helpers auth status [--json]`: reports whether a helper auth session is available.
+- `distlang helpers request <METHOD> <PATH_OR_URL> [--body-file=...] [--content-type=...] [--json]`: makes an authenticated public API request using the saved helper session.
 - `distlang helpers store objectdb status`: confirms store access for the logged-in user.
 - `distlang helpers store objectdb buckets list|create|exists|delete`: manage ObjectDB buckets.
 - `distlang helpers store objectdb keys list <bucket>`: list keys in a bucket with optional pagination flags.
