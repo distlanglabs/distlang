@@ -96,6 +96,19 @@ export function instantiateMetrics(definition, metricSetName) {
       continue;
     }
 
+    if (metricDefinition.kind === "gauge") {
+      instruments[metricName] = {
+        set(value, labels = {}) {
+          const amount = Number(value);
+          if (!Number.isFinite(amount)) {
+            throw new Error(`helpers.instantiateMetrics: ${metricName}.set value must be a finite number`);
+          }
+          recordMetric(state, metricName, metricDefinition, amount, labels);
+        },
+      };
+      continue;
+    }
+
     instruments[metricName] = {
       observe(value, labels = {}) {
         const amount = Number(value);
@@ -131,8 +144,13 @@ function recordMetric(state, metricName, metricDefinition, value, labelsInput) {
     state.buffer.set(bufferKey, entry);
   }
 
-  entry.count += 1;
-  entry.sum += value;
+  if (metricDefinition.kind === "gauge") {
+    entry.count = 1;
+    entry.sum = value;
+  } else {
+    entry.count += 1;
+    entry.sum += value;
+  }
   if (metricDefinition.kind === "histogram") {
     entry.values.push(value);
   }
@@ -238,7 +256,7 @@ function normalizeMetricDefinitions(definition) {
       throw new Error("helpers.instantiateMetrics: metric names must be non-empty strings");
     }
     if (typeof rawDefinition === "string") {
-      if (rawDefinition !== "counter" && rawDefinition !== "histogram") {
+      if (!isSupportedMetricKind(rawDefinition)) {
         throw new Error(`helpers.instantiateMetrics: unsupported metric kind for ${metricName}: ${rawDefinition}`);
       }
       normalized[metricName] = {
@@ -253,7 +271,7 @@ function normalizeMetricDefinitions(definition) {
       throw new Error(`helpers.instantiateMetrics: metric definition for ${metricName} must be a string or object`);
     }
     const kind = rawDefinition.kind;
-    if (kind !== "counter" && kind !== "histogram") {
+    if (!isSupportedMetricKind(kind)) {
       throw new Error(`helpers.instantiateMetrics: unsupported metric kind for ${metricName}: ${kind}`);
     }
     const labels = Array.isArray(rawDefinition.labels) ? rawDefinition.labels.map((label) => String(label)).sort() : [];
@@ -265,6 +283,10 @@ function normalizeMetricDefinitions(definition) {
     };
   }
   return normalized;
+}
+
+function isSupportedMetricKind(kind) {
+  return kind === "counter" || kind === "histogram" || kind === "gauge";
 }
 
 function normalizeMetricLabels(metricName, metricDefinition, labelsInput) {

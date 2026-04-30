@@ -415,7 +415,7 @@ function instantiateMetrics(definition, bucketName) {
     if (typeof metricName !== "string" || metricName.trim() === "") {
       throw new Error("helpers.instantiateMetrics: metric names must be non-empty strings");
     }
-    if (metricKind !== "counter" && metricKind !== "histogram") {
+    if (!isSupportedMetricKind(metricKind)) {
       throw new Error(`helpers.instantiateMetrics: unsupported metric kind for ${metricName}: ${metricKind}`);
     }
 
@@ -425,6 +425,19 @@ function instantiateMetrics(definition, bucketName) {
           const amount = Number(value);
           if (!Number.isFinite(amount) || amount <= 0) {
             throw new Error(`helpers.instantiateMetrics: ${metricName}.inc value must be a positive number`);
+          }
+          recordMetric(state, metricName, metricKind, amount);
+        },
+      };
+      continue;
+    }
+
+    if (metricKind === "gauge") {
+      instruments[metricName] = {
+        set(value) {
+          const amount = Number(value);
+          if (!Number.isFinite(amount)) {
+            throw new Error(`helpers.instantiateMetrics: ${metricName}.set value must be a finite number`);
           }
           recordMetric(state, metricName, metricKind, amount);
         },
@@ -465,13 +478,22 @@ function recordMetric(state, metricName, metricKind, value) {
     state.buffer.set(bufferKey, entry);
   }
 
-  entry.count += 1;
-  entry.sum += value;
+  if (metricKind === "gauge") {
+    entry.count = 1;
+    entry.sum = value;
+  } else {
+    entry.count += 1;
+    entry.sum += value;
+  }
   if (metricKind === "histogram") {
     entry.values.push(value);
   }
 
   queueMetricsFlush(state, { flushCurrentWindow: false });
+}
+
+function isSupportedMetricKind(kind) {
+  return kind === "counter" || kind === "histogram" || kind === "gauge";
 }
 
 function ensureMetricsBucket(state) {
