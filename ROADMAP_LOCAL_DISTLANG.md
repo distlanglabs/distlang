@@ -2,7 +2,7 @@
 
 ## Goal
 
-Make `distlang local` provide an unauthenticated local Distlang experience at `/distlang`, backed by local SQLite, so users can record and explore Metrics without a Distlang account.
+Make `distlang local` provide an unauthenticated local Distlang experience at `/distlang`, backed by local SQLite owned by the installed `distlang` tool, so users can record and explore Metrics without a Distlang account.
 
 ## UX Decision
 
@@ -56,6 +56,7 @@ Initial behavior:
 
 - Start a local server on `127.0.0.1:4817`
 - Open `http://127.0.0.1:4817/distlang`
+- Create or open the local database automatically
 - Store local data under `~/.distlang/local/`
 - Print the local URL and database path
 
@@ -83,20 +84,31 @@ Serve local Distlang pages and APIs without auth:
 
 Use a fixed local owner scope, probably `userId = "local"`.
 
+The local server should run inside the `distlang local` process. Users should not need to install SQLite separately, run a database daemon, or start another service.
+
 The local server should eventually become a unified local home for Distlang products, starting with Metrics and later including Agent Debugger.
+
+## Local Storage Model
+
+SQLite should be an implementation detail of the installed `distlang` tool.
+
+Users should not need to install SQLite, run a separate database, or start a separate service. `distlang local` should create and manage the database file under `~/.distlang/local/`.
+
+The local Metrics API should depend on a small store interface so the HTTP server is not coupled directly to SQLite. The first implementation is SQLite-backed local storage; tests may use an in-memory implementation.
 
 ## Shared Metrics Core
 
 Extract reusable Metrics logic from `do-service` while keeping production behavior unchanged:
 
 - Row schema helpers
-- SQLite row store implementation
+- Local Metrics store abstraction
+- SQLite-backed local store implementation inside `distlang`
 - Metadata generation
 - Prom-style instant query
 - Prom-style range query
 - Dashboard-data query helpers
 
-Production `do-service` keeps Durable Object-backed storage. Local Distlang uses SQLite-backed storage.
+Production `do-service` keeps Durable Object-backed storage. Local Distlang uses SQLite-backed storage through the installed `distlang` binary.
 
 ## Explorer UI
 
@@ -190,7 +202,9 @@ Better future API:
 
 ### Milestone 3: Local SQLite Metrics API
 
-- Add a local row store
+- Add a local Metrics store abstraction inside `distlang`
+- Back the first local store with SQLite owned by the installed `distlang` binary
+- Store database files under `~/.distlang/local/`
 - Add unauthenticated local metrics endpoints
 - Verify writes, metadata, instant query, and range query
 
