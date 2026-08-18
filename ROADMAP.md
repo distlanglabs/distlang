@@ -48,6 +48,7 @@ Near-term roadmap work prioritizes helpers and store over broader compiler or pr
 - Phase 1 is actively in progress and already has significant implementation.
 - Phase 2 has not been completed, but some prerequisites already exist.
 - Phase 3 is partially underway through auth, dashboard, and store surface work.
+- A separate local-first plan for unauthenticated Metrics and local explorer UX lives in [ROADMAP_LOCAL_DISTLANG.md](./ROADMAP_LOCAL_DISTLANG.md).
 
 Evidence already in the workspace:
 
