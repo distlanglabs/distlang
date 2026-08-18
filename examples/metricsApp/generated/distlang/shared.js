@@ -98,7 +98,8 @@ export function queryOptions(options = {}) {
 }
 
 export async function requestJSON(method, path, cfg, options = {}) {
-  const url = new URL(path, cfg.baseURL);
+  const baseURL = cfg.baseURL.endsWith("/") ? cfg.baseURL : `${cfg.baseURL}/`;
+  const url = new URL(String(path).replace(/^\/+/, ""), baseURL);
   if (Array.isArray(options.query)) {
     for (const [key, value] of options.query) {
       url.searchParams.append(key, value);

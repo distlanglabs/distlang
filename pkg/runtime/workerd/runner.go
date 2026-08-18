@@ -6,6 +6,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 )
 
 // Runner launches a local workerd preview process.
@@ -41,10 +42,17 @@ func (Runner) Start(ctx context.Context, entryPath string, port int) error {
 const config :Workerd.Config = (
   services = [
     (
+      name = "internet",
+      network = (
+        allow = [ "public", "private" ],
+        tlsOptions = (trustBrowserCas = true)
+      )
+    ),
+    (
       name = "distlang",
       worker = (
         compatibilityDate = "2024-01-01",
-        modules = [ (name = "worker", esModule = embed "worker.js") ]
+        modules = [ (name = "worker", esModule = embed "worker.js") ]%s
       )
     )
   ],
@@ -52,7 +60,7 @@ const config :Workerd.Config = (
     ( name = "http", address = "127.0.0.1:%d", http = (), service = "distlang" )
   ]
 );
-`, port)
+`, workerdBindings(), port)
 	if err := os.WriteFile(config, []byte(content), 0o644); err != nil {
 		return err
 	}
@@ -62,4 +70,20 @@ const config :Workerd.Config = (
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	return cmd.Run()
+}
+
+func workerdBindings() string {
+	keys := []string{"DISTLANG_HELPERS_MODE", "DISTLANG_STORE_BASE_URL", "DISTLANG_SERVICE_TOKEN"}
+	bindings := []string{}
+	for _, key := range keys {
+		value := os.Getenv(key)
+		if value == "" {
+			continue
+		}
+		bindings = append(bindings, fmt.Sprintf(`(name = %q, text = %q)`, key, value))
+	}
+	if len(bindings) == 0 {
+		return ""
+	}
+	return ",\n        bindings = [ " + strings.Join(bindings, ", ") + " ]"
 }

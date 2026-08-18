@@ -64,6 +64,8 @@ func main() {
 			commandHelpHelpersLogout()
 		case "run":
 			commandHelpRun()
+		case "local":
+			commandHelpLocal()
 		case "debug":
 			commandHelpDebug()
 		case "--full-help", "--fullhelp", "full":
@@ -86,6 +88,8 @@ func main() {
 		os.Exit(runHelpers(args))
 	case "run":
 		os.Exit(runRun(args))
+	case "local":
+		os.Exit(runLocal(args))
 	case "debug":
 		os.Exit(runDebug(args))
 	case "version":

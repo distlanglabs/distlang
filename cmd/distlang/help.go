@@ -14,6 +14,7 @@ var commands = []commandInfo{
 	{Name: "deploy", Description: "Deploy to Distlang hosting or a provider", Usage: "distlang deploy <file> [--target=distlang|cloudflare] | distlang deploy <list|delete|debug>"},
 	{Name: "helpers", Description: "Manage Distlang helper auth session and store access", Usage: "distlang helpers <auth|login|request|serve|store|whoami|logout>"},
 	{Name: "run", Description: "Run the local V8 runtime", Usage: "distlang run <file> [--v8-port=N] [--set=all|handlerSet1|handlerSet2] [--port1=N] [--port2=N]"},
+	{Name: "local", Description: "Run local Distlang APIs and UI", Usage: "distlang local [--host=127.0.0.1] [--port=4817] [--no-open]"},
 	{Name: "debug", Description: "Inspect compiler passes for build or run", Usage: "distlang debug <build|run> <file> [--passes=parse,ir,emit]"},
 	{Name: "version", Description: "Show distlang version information", Usage: "distlang version"},
 	{Name: "help", Description: "Show help for distlang", Usage: "distlang help"},
@@ -77,6 +78,9 @@ func fullHelp() {
 	fmt.Println()
 	fmt.Println("---")
 	commandHelpRun()
+	fmt.Println()
+	fmt.Println("---")
+	commandHelpLocal()
 	fmt.Println()
 	fmt.Println("---")
 	commandHelpDebug()
@@ -294,6 +298,18 @@ func commandHelpRun() {
 	fmt.Println("  --port2=N       Port for handlerSet2 when running simpleApp (default: 5657)")
 	fmt.Println("Notes:")
 	fmt.Println("  run builds the V8 backend first, then launches workerd instances.")
+}
+
+func commandHelpLocal() {
+	fmt.Println("local - Run local Distlang APIs and UI")
+	fmt.Println("Usage: distlang local [--host=127.0.0.1] [--port=4817] [--no-open]")
+	fmt.Println("Options:")
+	fmt.Println("  --host=HOST    Host interface to bind (default: 127.0.0.1)")
+	fmt.Println("  --port=PORT    TCP port to bind (default: 4817)")
+	fmt.Println("  --no-open      Do not attempt to open a browser")
+	fmt.Println("Notes:")
+	fmt.Println("  Starts unauthenticated local Metrics endpoints at /distlang/metrics/v1.")
+	fmt.Println("  Storage is in-memory until the local SQLite store is added.")
 }
 
 func commandHelpDebug() {
