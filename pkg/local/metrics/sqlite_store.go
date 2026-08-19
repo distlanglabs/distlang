@@ -310,6 +310,12 @@ func (b *SQLiteQueryBackend) QueryRange(ctx context.Context, req QueryRangeReque
 
 func (b *SQLiteQueryBackend) SQL(ctx context.Context, req SQLQueryRequest) (SQLQueryResponse, error) {
 	query := strings.TrimSpace(req.Query)
+	if response, handled, err := sqlMetaCommand(query); handled || err != nil {
+		if err != nil {
+			return SQLQueryResponse{}, err
+		}
+		return response, nil
+	}
 	if err := validateReadOnlySQL(query); err != nil {
 		return SQLQueryResponse{}, err
 	}
@@ -363,6 +369,63 @@ func (b *SQLiteQueryBackend) SQL(ctx context.Context, req SQLQueryRequest) (SQLQ
 	return SQLQueryResponse{Columns: columns, Rows: outRows, Stats: SQLQueryStats{RowCount: len(outRows), DurationMS: time.Since(startedAt).Milliseconds()}}, nil
 }
 
+func sqlMetaCommand(query string) (SQLQueryResponse, bool, error) {
+	trimmed := strings.TrimSpace(strings.TrimRight(strings.TrimSpace(query), ";"))
+	lower := strings.ToLower(trimmed)
+	if lower == "show tables" || lower == ".tables" {
+		rows := [][]any{}
+		for _, table := range sqliteTableDetails() {
+			rows = append(rows, []any{table.Name, table.Description})
+		}
+		return SQLQueryResponse{
+			Columns: []SQLColumn{{Name: "table"}, {Name: "description"}},
+			Rows:    rows,
+			Stats:   SQLQueryStats{RowCount: len(rows)},
+		}, true, nil
+	}
+
+	fields := strings.Fields(trimmed)
+	if len(fields) == 0 {
+		return SQLQueryResponse{}, false, nil
+	}
+	command := strings.ToLower(fields[0])
+	if command != "describe" && command != "desc" && command != ".schema" {
+		return SQLQueryResponse{}, false, nil
+	}
+	if command == ".schema" {
+		if len(fields) != 2 {
+			return SQLQueryResponse{}, true, errors.New("usage: .schema <table>")
+		}
+		return describeSQLTable(fields[1])
+	}
+	if len(fields) == 3 && strings.EqualFold(fields[1], "table") {
+		return describeSQLTable(fields[2])
+	}
+	if len(fields) == 2 {
+		return describeSQLTable(fields[1])
+	}
+	return SQLQueryResponse{}, true, errors.New("usage: describe [table] <table>")
+}
+
+func describeSQLTable(tableName string) (SQLQueryResponse, bool, error) {
+	tableName = strings.Trim(strings.TrimSpace(tableName), "`\"")
+	for _, table := range sqliteTableDetails() {
+		if table.Name != tableName {
+			continue
+		}
+		rows := make([][]any, 0, len(table.Columns))
+		for _, column := range table.Columns {
+			rows = append(rows, []any{column.Name, column.Type, column.Nullable, column.PrimaryKey})
+		}
+		return SQLQueryResponse{
+			Columns: []SQLColumn{{Name: "column"}, {Name: "type"}, {Name: "nullable"}, {Name: "primaryKey"}},
+			Rows:    rows,
+			Stats:   SQLQueryStats{RowCount: len(rows)},
+		}, true, nil
+	}
+	return SQLQueryResponse{}, true, fmt.Errorf("unknown SQL table %q", tableName)
+}
+
 func validateReadOnlySQL(query string) error {
 	lower := strings.ToLower(strings.TrimSpace(query))
 	if lower == "" {
@@ -386,12 +449,61 @@ func validateReadOnlySQL(query string) error {
 }
 
 func defaultSQLSchema() []SQLSchemaObject {
-	schema := []SQLSchemaObject{
-		{Name: "metric_sets", Description: "Local metric set names", Columns: []string{"metric_set", "created_at"}},
-		{Name: "metric_definitions", Description: "Metric definitions registered by helpers", Columns: []string{"metric_set", "metric", "kind", "description", "unit", "labels_json"}},
-		{Name: "metric_rows", Description: "Aggregated metric rows emitted by helpers", Columns: []string{"id", "metric_set", "metric", "kind", "window_start", "labels_json", "count", "sum"}},
-		{Name: "metric_row_values", Description: "Histogram sample values for metric rows", Columns: []string{"row_id", "value"}},
+	tables := sqliteTableDetails()
+	schema := make([]SQLSchemaObject, 0, len(tables))
+	for _, table := range tables {
+		columns := make([]string, 0, len(table.Columns))
+		for _, column := range table.Columns {
+			columns = append(columns, column.Name)
+		}
+		schema = append(schema, SQLSchemaObject{Name: table.Name, Description: table.Description, Columns: columns})
 	}
 	sort.Slice(schema, func(i, j int) bool { return schema[i].Name < schema[j].Name })
 	return schema
+}
+
+type sqliteTableDetail struct {
+	Name        string
+	Description string
+	Columns     []sqliteColumnDetail
+}
+
+type sqliteColumnDetail struct {
+	Name       string
+	Type       string
+	Nullable   bool
+	PrimaryKey bool
+}
+
+func sqliteTableDetails() []sqliteTableDetail {
+	tables := []sqliteTableDetail{
+		{Name: "metric_sets", Description: "Local metric set names", Columns: []sqliteColumnDetail{
+			{Name: "metric_set", Type: "TEXT", PrimaryKey: true},
+			{Name: "created_at", Type: "TEXT"},
+		}},
+		{Name: "metric_definitions", Description: "Metric definitions registered by helpers", Columns: []sqliteColumnDetail{
+			{Name: "metric_set", Type: "TEXT", PrimaryKey: true},
+			{Name: "metric", Type: "TEXT", PrimaryKey: true},
+			{Name: "kind", Type: "TEXT"},
+			{Name: "description", Type: "TEXT"},
+			{Name: "unit", Type: "TEXT"},
+			{Name: "labels_json", Type: "TEXT"},
+		}},
+		{Name: "metric_rows", Description: "Aggregated metric rows emitted by helpers", Columns: []sqliteColumnDetail{
+			{Name: "id", Type: "INTEGER", PrimaryKey: true},
+			{Name: "metric_set", Type: "TEXT"},
+			{Name: "metric", Type: "TEXT"},
+			{Name: "kind", Type: "TEXT"},
+			{Name: "window_start", Type: "TEXT"},
+			{Name: "labels_json", Type: "TEXT"},
+			{Name: "count", Type: "REAL", Nullable: true},
+			{Name: "sum", Type: "REAL", Nullable: true},
+		}},
+		{Name: "metric_row_values", Description: "Histogram sample values for metric rows", Columns: []sqliteColumnDetail{
+			{Name: "row_id", Type: "INTEGER"},
+			{Name: "value", Type: "REAL"},
+		}},
+	}
+	sort.Slice(tables, func(i, j int) bool { return tables[i].Name < tables[j].Name })
+	return tables
 }

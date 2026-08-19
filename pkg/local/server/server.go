@@ -377,7 +377,12 @@ func localMetricsHTML() string {
       <h2>SQL Query</h2>
       <p id="sql-status">SQL is loading backend capabilities.</p>
       <textarea id="sql-query" spellcheck="false">select metric_set, metric, kind, window_start, count, sum from metric_rows order by window_start desc limit 20</textarea>
-      <div class="toolbar"><button id="run-sql" disabled>Run SQL</button></div>
+      <div class="toolbar">
+        <button id="run-sql" disabled>Run SQL</button>
+        <button class="sql-example" data-sql="show tables;" disabled>Show Tables</button>
+        <button class="sql-example" data-sql="describe metric_rows;" disabled>Describe metric_rows</button>
+        <button class="sql-example" data-sql="select metric_set, metric, kind, window_start, count, sum from metric_rows order by window_start desc limit 20" disabled>Sample Rows</button>
+      </div>
       <pre id="sql-output">SQL results will appear here.</pre>
       <pre id="schema">Loading schema hints...</pre>
     </section>
@@ -393,6 +398,7 @@ func localMetricsHTML() string {
     const sqlQueryEl = document.querySelector("#sql-query");
     const sqlOutputEl = document.querySelector("#sql-output");
     const runSQLEl = document.querySelector("#run-sql");
+    const sqlExampleEls = Array.from(document.querySelectorAll(".sql-example"));
     const schemaEl = document.querySelector("#schema");
     let capabilities = null;
 
@@ -440,6 +446,7 @@ func localMetricsHTML() string {
         ? "SQL is available for this backend."
         : "SQL is not available for this backend yet. This panel will activate for local SQLite and future authenticated Durable Object SQL backends.";
       runSQLEl.disabled = !features.sql;
+      for (const button of sqlExampleEls) button.disabled = !features.sql;
       schemaEl.textContent = JSON.stringify(capabilities.schema || [], null, 2);
     }
 
@@ -475,6 +482,12 @@ func localMetricsHTML() string {
     document.querySelector("#refresh").addEventListener("click", loadMetadata);
     document.querySelector("#run").addEventListener("click", runQuery);
     runSQLEl.addEventListener("click", runSQL);
+    for (const button of sqlExampleEls) {
+      button.addEventListener("click", () => {
+        sqlQueryEl.value = button.dataset.sql || "";
+        runSQL();
+      });
+    }
     queryEl.addEventListener("keydown", (event) => {
       if (event.key === "Enter") runQuery();
     });

@@ -121,6 +121,19 @@ func TestSQLEndpointWithSQLiteBackend(t *testing.T) {
 	if len(payload.Rows) != 1 || payload.Rows[0][0] != "local-app" || payload.Rows[0][1] != "requests" {
 		t.Fatalf("unexpected SQL payload: %#v", payload)
 	}
+
+	req = httptest.NewRequest(http.MethodPost, "/distlang/metrics/v1/sql", strings.NewReader(`{"query":"show tables"}`))
+	res = httptest.NewRecorder()
+	r.handle(res, req)
+	if res.Code != http.StatusOK {
+		t.Fatalf("show tables status: %d %s", res.Code, res.Body.String())
+	}
+	if err := json.Unmarshal(res.Body.Bytes(), &payload); err != nil {
+		t.Fatalf("decode show tables: %v", err)
+	}
+	if len(payload.Rows) != 4 || payload.Rows[0][0] != "metric_definitions" {
+		t.Fatalf("unexpected show tables payload: %#v", payload)
+	}
 }
 
 func putJSON(t *testing.T, r *Running, method string, path string, value any) {

@@ -65,6 +65,42 @@ func TestSQLiteStoreCapabilitiesEnableSQL(t *testing.T) {
 	}
 }
 
+func TestSQLiteStoreSQLMetaCommands(t *testing.T) {
+	store, err := OpenSQLiteStore(t.TempDir() + "/metrics.db")
+	if err != nil {
+		t.Fatalf("OpenSQLiteStore: %v", err)
+	}
+	defer store.Close()
+	backend := NewSQLiteQueryBackend(store)
+
+	tables, err := backend.SQL(context.Background(), SQLQueryRequest{Query: `show tables;`})
+	if err != nil {
+		t.Fatalf("show tables: %v", err)
+	}
+	if len(tables.Rows) != 4 || tables.Rows[0][0] != "metric_definitions" {
+		t.Fatalf("unexpected show tables result: %#v", tables)
+	}
+
+	description, err := backend.SQL(context.Background(), SQLQueryRequest{Query: `describe table metric_rows`})
+	if err != nil {
+		t.Fatalf("describe: %v", err)
+	}
+	if len(description.Rows) != 8 || description.Rows[0][0] != "id" || description.Rows[0][1] != "INTEGER" {
+		t.Fatalf("unexpected describe result: %#v", description)
+	}
+}
+
+func TestSQLiteStoreSQLMetaCommandRejectsUnknownTable(t *testing.T) {
+	store, err := OpenSQLiteStore(t.TempDir() + "/metrics.db")
+	if err != nil {
+		t.Fatalf("OpenSQLiteStore: %v", err)
+	}
+	defer store.Close()
+	if _, err := NewSQLiteQueryBackend(store).SQL(context.Background(), SQLQueryRequest{Query: `describe sqlite_master`}); err == nil {
+		t.Fatalf("expected unknown table to be rejected")
+	}
+}
+
 func TestSQLiteStoreSQLRejectsWrites(t *testing.T) {
 	store, err := OpenSQLiteStore(t.TempDir() + "/metrics.db")
 	if err != nil {
