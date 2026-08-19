@@ -62,8 +62,64 @@ func TestMetricsExplorerHTML(t *testing.T) {
 		t.Fatalf("status: %d %s", res.Code, res.Body.String())
 	}
 	body := res.Body.String()
-	if !strings.Contains(body, "Local Metrics Explorer") || !strings.Contains(body, "/distlang/metrics/v1/api/v1/metadata") {
+	if !strings.Contains(body, "Local Metrics Explorer") || !strings.Contains(body, "/distlang/metrics/v1/api/v1/metadata") || !strings.Contains(body, "/distlang/metrics/v1/capabilities") {
 		t.Fatalf("metrics explorer html missing expected content: %s", body)
+	}
+}
+
+func TestCapabilitiesEndpoint(t *testing.T) {
+	r := &Running{store: localmetrics.NewMemoryStore()}
+	req := httptest.NewRequest(http.MethodGet, "/distlang/metrics/v1/capabilities", nil)
+	res := httptest.NewRecorder()
+	r.handle(res, req)
+	if res.Code != http.StatusOK {
+		t.Fatalf("status: %d %s", res.Code, res.Body.String())
+	}
+	var payload localmetrics.Capabilities
+	if err := json.Unmarshal(res.Body.Bytes(), &payload); err != nil {
+		t.Fatalf("decode capabilities: %v", err)
+	}
+	if payload.Mode != "local" || payload.Storage != "memory" || payload.Auth || payload.Features["sql"] {
+		t.Fatalf("unexpected capabilities: %#v", payload)
+	}
+}
+
+func TestSQLEndpointUnavailableForMemoryBackend(t *testing.T) {
+	r := &Running{store: localmetrics.NewMemoryStore()}
+	req := httptest.NewRequest(http.MethodPost, "/distlang/metrics/v1/sql", strings.NewReader(`{"query":"select 1"}`))
+	res := httptest.NewRecorder()
+	r.handle(res, req)
+	if res.Code != http.StatusNotImplemented {
+		t.Fatalf("status: %d %s", res.Code, res.Body.String())
+	}
+}
+
+func TestSQLEndpointWithSQLiteBackend(t *testing.T) {
+	store, err := localmetrics.OpenSQLiteStore(t.TempDir() + "/metrics.db")
+	if err != nil {
+		t.Fatalf("OpenSQLiteStore: %v", err)
+	}
+	defer store.Close()
+	r := &Running{store: store, backend: localmetrics.NewSQLiteQueryBackend(store)}
+	putJSON(t, r, http.MethodPut, "/distlang/metrics/v1/metricsets/local-app/metadata", map[string]any{
+		"metrics": map[string]any{"requests": map[string]any{"kind": "counter", "description": "Requests", "unit": "count"}},
+	})
+	now := time.Now().UTC().Format(time.RFC3339Nano)
+	putJSON(t, r, http.MethodPost, "/distlang/metrics/v1/metricsets/local-app/rows", map[string]any{
+		"rows": []map[string]any{{"ts": now, "data": map[string]any{"metric": "requests", "kind": "counter", "windowStart": now, "count": 2, "sum": 2}}},
+	})
+	req := httptest.NewRequest(http.MethodPost, "/distlang/metrics/v1/sql", strings.NewReader(`{"query":"select metric_set, metric, sum from metric_rows where metric_set = 'local-app'","limit":10}`))
+	res := httptest.NewRecorder()
+	r.handle(res, req)
+	if res.Code != http.StatusOK {
+		t.Fatalf("status: %d %s", res.Code, res.Body.String())
+	}
+	var payload localmetrics.SQLQueryResponse
+	if err := json.Unmarshal(res.Body.Bytes(), &payload); err != nil {
+		t.Fatalf("decode sql: %v", err)
+	}
+	if len(payload.Rows) != 1 || payload.Rows[0][0] != "local-app" || payload.Rows[0][1] != "requests" {
+		t.Fatalf("unexpected SQL payload: %#v", payload)
 	}
 }
 

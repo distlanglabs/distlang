@@ -9,6 +9,7 @@ import (
 	"strings"
 	"syscall"
 
+	localmetrics "github.com/distlanglabs/distlang/pkg/local/metrics"
 	localserver "github.com/distlanglabs/distlang/pkg/local/server"
 )
 
@@ -16,6 +17,8 @@ func runLocal(args []string) int {
 	host := "127.0.0.1"
 	port := 4817
 	openBrowser := true
+	useMemory := false
+	dbPath := ""
 
 	for _, arg := range args {
 		switch {
@@ -24,6 +27,10 @@ func runLocal(args []string) int {
 			return 0
 		case arg == "--no-open":
 			openBrowser = false
+		case arg == "--memory":
+			useMemory = true
+		case strings.HasPrefix(arg, "--db="):
+			dbPath = strings.TrimSpace(strings.TrimPrefix(arg, "--db="))
 		case strings.HasPrefix(arg, "--host="):
 			host = strings.TrimSpace(strings.TrimPrefix(arg, "--host="))
 		case strings.HasPrefix(arg, "--port="):
@@ -39,17 +46,44 @@ func runLocal(args []string) int {
 		}
 	}
 
+	storage := "memory"
+	if !useMemory {
+		store, err := localmetrics.OpenSQLiteStore(dbPath)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "local failed: open sqlite store: %v\n", err)
+			return 1
+		}
+		storage = "sqlite"
+		if dbPath == "" {
+			if resolved, err := localmetrics.DefaultSQLitePath(); err == nil {
+				dbPath = resolved
+			}
+		}
+		running, err := localserver.Start(localserver.Config{Host: host, Port: port, Store: store, Backend: localmetrics.NewSQLiteQueryBackend(store)})
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "local failed: %v\n", err)
+			return 1
+		}
+		return waitForLocal(running, storage, dbPath, openBrowser)
+	}
+
 	running, err := localserver.Start(localserver.Config{Host: host, Port: port})
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "local failed: %v\n", err)
 		return 1
 	}
-	defer func() { _ = running.Close(context.Background()) }()
+	return waitForLocal(running, storage, dbPath, openBrowser)
+}
 
+func waitForLocal(running *localserver.Running, storage string, dbPath string, openBrowser bool) int {
+	defer func() { _ = running.Close(context.Background()) }()
 	fmt.Printf("distlang local listening on %s\n", running.URL())
 	fmt.Printf("- local UI: %s\n", running.DistlangURL())
 	fmt.Printf("- metrics API: %s/metrics/v1\n", running.DistlangURL())
-	fmt.Println("- storage: memory")
+	fmt.Printf("- storage: %s\n", storage)
+	if dbPath != "" {
+		fmt.Printf("- database: %s\n", dbPath)
+	}
 	if openBrowser {
 		fmt.Println("- open: not implemented yet; visit the local UI URL manually")
 	}

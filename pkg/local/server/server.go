@@ -4,12 +4,10 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"io"
 	"net"
 	"net/http"
 	"net/url"
-	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -18,15 +16,17 @@ import (
 )
 
 type Config struct {
-	Host  string
-	Port  int
-	Store localmetrics.Store
+	Host    string
+	Port    int
+	Store   localmetrics.Store
+	Backend localmetrics.QueryBackend
 }
 
 type Running struct {
-	server *http.Server
-	ln     net.Listener
-	store  localmetrics.Store
+	server  *http.Server
+	ln      net.Listener
+	store   localmetrics.Store
+	backend localmetrics.QueryBackend
 }
 
 func Start(cfg Config) (*Running, error) {
@@ -42,12 +42,16 @@ func Start(cfg Config) (*Running, error) {
 	if store == nil {
 		store = localmetrics.NewMemoryStore()
 	}
+	backend := cfg.Backend
+	if backend == nil {
+		backend = localmetrics.NewMemoryQueryBackend(store)
+	}
 
 	ln, err := net.Listen("tcp", net.JoinHostPort(host, strconv.Itoa(port)))
 	if err != nil {
 		return nil, err
 	}
-	r := &Running{ln: ln, store: store}
+	r := &Running{ln: ln, store: store, backend: backend}
 	mux := http.NewServeMux()
 	mux.HandleFunc("/", r.handle)
 	r.server = &http.Server{Handler: mux}
@@ -61,6 +65,13 @@ func (r *Running) URL() string {
 
 func (r *Running) DistlangURL() string {
 	return r.URL() + "/distlang"
+}
+
+func (r *Running) queryBackend() localmetrics.QueryBackend {
+	if r.backend != nil {
+		return r.backend
+	}
+	return localmetrics.NewMemoryQueryBackend(r.store)
 }
 
 func (r *Running) Close(ctx context.Context) error {
@@ -90,12 +101,20 @@ func (r *Running) handle(w http.ResponseWriter, req *http.Request) {
 		r.handleMetadata(w, req)
 		return
 	}
+	if req.Method == http.MethodGet && path == "/metrics/v1/capabilities" {
+		r.handleCapabilities(w, req)
+		return
+	}
 	if req.Method == http.MethodGet && path == "/metrics/v1/api/v1/query" {
 		r.handleQuery(w, req)
 		return
 	}
 	if req.Method == http.MethodGet && path == "/metrics/v1/api/v1/query_range" {
 		r.handleQueryRange(w, req)
+		return
+	}
+	if req.Method == http.MethodPost && path == "/metrics/v1/sql" {
+		r.handleSQL(w, req)
 		return
 	}
 	if strings.HasPrefix(path, "/metrics/v1/metricsets/") {
@@ -173,150 +192,69 @@ func (r *Running) handleMetricSet(w http.ResponseWriter, req *http.Request, path
 }
 
 func (r *Running) handleMetadata(w http.ResponseWriter, req *http.Request) {
-	metadata, err := r.store.Metadata(req.Context(), req.URL.Query().Get("metric"))
+	metadata, err := r.queryBackend().Metadata(req.Context(), localmetrics.MetadataRequest{Metric: req.URL.Query().Get("metric")})
 	if err != nil {
 		writeError(w, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"status": "success", "data": metadata})
+	writeJSON(w, http.StatusOK, metadata)
+}
+
+func (r *Running) handleCapabilities(w http.ResponseWriter, req *http.Request) {
+	writeJSON(w, http.StatusOK, r.queryBackend().Capabilities(req.Context()))
 }
 
 func (r *Running) handleQuery(w http.ResponseWriter, req *http.Request) {
-	parsed, err := parseQuery(req.URL.Query().Get("query"))
-	if err != nil {
-		writeJSON(w, http.StatusBadRequest, map[string]any{"status": "error", "error": err.Error()})
-		return
-	}
 	evalTime := time.Now().UTC()
 	if raw := strings.TrimSpace(req.URL.Query().Get("time")); raw != "" {
-		if parsedTime, err := parsePromTime(raw); err == nil {
+		if parsedTime, err := localmetrics.ParsePromTime(raw); err == nil {
 			evalTime = parsedTime
 		}
 	}
-	value, err := r.evaluate(req.Context(), parsed, evalTime)
-	if err != nil {
-		writeError(w, err)
-		return
-	}
-	result := []any{}
-	if value != 0 {
-		result = append(result, map[string]any{
-			"metric": map[string]string{"__name__": parsed.Metric, "metricSet": parsed.MetricSet},
-			"value":  []any{float64(evalTime.UnixNano()) / 1e9, strconv.FormatFloat(value, 'f', -1, 64)},
-		})
-	}
-	writeJSON(w, http.StatusOK, map[string]any{"status": "success", "data": map[string]any{"resultType": "vector", "result": result}})
-}
-
-func (r *Running) handleQueryRange(w http.ResponseWriter, req *http.Request) {
-	parsed, err := parseQuery(req.URL.Query().Get("query"))
+	result, err := r.queryBackend().Query(req.Context(), localmetrics.QueryRequest{Query: req.URL.Query().Get("query"), Time: evalTime})
 	if err != nil {
 		writeJSON(w, http.StatusBadRequest, map[string]any{"status": "error", "error": err.Error()})
 		return
 	}
-	start, err := parsePromTime(req.URL.Query().Get("start"))
+	writeJSON(w, http.StatusOK, result)
+}
+
+func (r *Running) handleQueryRange(w http.ResponseWriter, req *http.Request) {
+	start, err := localmetrics.ParsePromTime(req.URL.Query().Get("start"))
 	if err != nil {
 		writeJSON(w, http.StatusBadRequest, map[string]any{"status": "error", "error": "invalid start"})
 		return
 	}
-	end, err := parsePromTime(req.URL.Query().Get("end"))
+	end, err := localmetrics.ParsePromTime(req.URL.Query().Get("end"))
 	if err != nil {
 		writeJSON(w, http.StatusBadRequest, map[string]any{"status": "error", "error": "invalid end"})
 		return
 	}
-	step, err := parsePromDuration(req.URL.Query().Get("step"))
+	step, err := localmetrics.ParsePromDuration(req.URL.Query().Get("step"))
 	if err != nil || step <= 0 {
 		writeJSON(w, http.StatusBadRequest, map[string]any{"status": "error", "error": "invalid step"})
 		return
 	}
-	values := []any{}
-	for ts := start; !ts.After(end); ts = ts.Add(step) {
-		value, err := r.evaluate(req.Context(), parsed, ts)
-		if err != nil {
-			writeError(w, err)
-			return
-		}
-		values = append(values, []any{float64(ts.UnixNano()) / 1e9, strconv.FormatFloat(value, 'f', -1, 64)})
-	}
-	result := []any{}
-	if len(values) > 0 {
-		result = append(result, map[string]any{"metric": map[string]string{"__name__": parsed.Metric, "metricSet": parsed.MetricSet}, "values": values})
-	}
-	writeJSON(w, http.StatusOK, map[string]any{"status": "success", "data": map[string]any{"resultType": "matrix", "result": result}})
-}
-
-type promQuery struct {
-	Function  string
-	Metric    string
-	MetricSet string
-	Range     time.Duration
-}
-
-var increaseRE = regexp.MustCompile(`^([a-zA-Z_][a-zA-Z0-9_]*)\(([a-zA-Z_:][a-zA-Z0-9_:]*)\{metricSet="([^"]+)"\}\[([^\]]+)\]\)$`)
-
-func parseQuery(raw string) (promQuery, error) {
-	match := increaseRE.FindStringSubmatch(strings.TrimSpace(raw))
-	if match == nil {
-		return promQuery{}, fmt.Errorf("unsupported local metrics query: %s", raw)
-	}
-	if match[1] != "increase" && match[1] != "sum_over_time" {
-		return promQuery{}, fmt.Errorf("unsupported local metrics function: %s", match[1])
-	}
-	duration, err := parsePromDuration(match[4])
+	result, err := r.queryBackend().QueryRange(req.Context(), localmetrics.QueryRangeRequest{Query: req.URL.Query().Get("query"), Start: start, End: end, Step: step})
 	if err != nil {
-		return promQuery{}, err
+		writeJSON(w, http.StatusBadRequest, map[string]any{"status": "error", "error": err.Error()})
+		return
 	}
-	return promQuery{Function: match[1], Metric: match[2], MetricSet: match[3], Range: duration}, nil
+	writeJSON(w, http.StatusOK, result)
 }
 
-func (r *Running) evaluate(ctx context.Context, query promQuery, evalTime time.Time) (float64, error) {
-	rows, err := r.store.LoadRows(ctx, localmetrics.RowQuery{MetricSet: query.MetricSet, Metric: query.Metric, Start: evalTime.Add(-query.Range), End: evalTime})
+func (r *Running) handleSQL(w http.ResponseWriter, req *http.Request) {
+	var sqlReq localmetrics.SQLQueryRequest
+	if err := readJSON(req, &sqlReq); err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]any{"error": "invalid_body", "message": err.Error()})
+		return
+	}
+	result, err := r.queryBackend().SQL(req.Context(), sqlReq)
 	if err != nil {
-		return 0, err
+		writeJSON(w, http.StatusNotImplemented, map[string]any{"error": "sql_unavailable", "message": err.Error()})
+		return
 	}
-	var total float64
-	for _, row := range rows {
-		if row.Row.Kind == "histogram" && len(row.Row.Values) > 0 {
-			for _, value := range row.Row.Values {
-				total += value
-			}
-			continue
-		}
-		total += row.Row.Sum
-	}
-	return total, nil
-}
-
-func parsePromDuration(raw string) (time.Duration, error) {
-	raw = strings.TrimSpace(raw)
-	if raw == "" {
-		return 0, errors.New("duration is required")
-	}
-	if strings.HasSuffix(raw, "d") {
-		days, err := strconv.Atoi(strings.TrimSuffix(raw, "d"))
-		if err != nil {
-			return 0, err
-		}
-		return time.Duration(days) * 24 * time.Hour, nil
-	}
-	return time.ParseDuration(raw)
-}
-
-func parsePromTime(raw string) (time.Time, error) {
-	raw = strings.TrimSpace(raw)
-	if raw == "" {
-		return time.Time{}, errors.New("time is required")
-	}
-	if numeric, err := strconv.ParseFloat(raw, 64); err == nil {
-		sec, frac := mathModf(numeric)
-		return time.Unix(int64(sec), int64(frac*1e9)).UTC(), nil
-	}
-	return time.Parse(time.RFC3339Nano, raw)
-}
-
-func mathModf(v float64) (float64, float64) {
-	whole := float64(int64(v))
-	return whole, v - whole
+	writeJSON(w, http.StatusOK, result)
 }
 
 func readJSON(req *http.Request, out any) error {
@@ -392,7 +330,8 @@ func localMetricsHTML() string {
     header { display: flex; align-items: end; justify-content: space-between; gap: 16px; margin-bottom: 24px; }
     h1 { margin: 0; font-size: clamp(28px, 6vw, 48px); letter-spacing: -0.04em; }
     p { color: #93a4b8; }
-    button, input { border: 1px solid #334155; border-radius: 10px; background: #0f172a; color: #e2e8f0; padding: 10px 12px; font: inherit; }
+    button, input, textarea { border: 1px solid #334155; border-radius: 10px; background: #0f172a; color: #e2e8f0; padding: 10px 12px; font: inherit; }
+    textarea { box-sizing: border-box; min-height: 90px; resize: vertical; width: 100%; }
     button { cursor: pointer; background: #155e75; border-color: #0891b2; }
     button:hover { background: #0e7490; }
     .grid { display: grid; grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr); gap: 18px; }
@@ -403,6 +342,8 @@ func localMetricsHTML() string {
     .metric small { display: block; color: #93a4b8; margin-top: 4px; }
     pre { overflow: auto; min-height: 220px; margin: 0; padding: 16px; border-radius: 14px; background: #020617; color: #bfdbfe; }
     .status { min-height: 20px; margin: 8px 0 0; color: #67e8f9; }
+    .pill { display: inline-flex; gap: 6px; align-items: center; margin: 4px 6px 0 0; padding: 5px 9px; border: 1px solid #1e3a5f; border-radius: 999px; background: #0f172a; color: #bae6fd; font-size: 13px; }
+    .disabled { opacity: 0.6; }
     @media (max-width: 800px) { header, .grid { display: block; } .card { margin-bottom: 18px; } }
   </style>
 </head>
@@ -412,6 +353,7 @@ func localMetricsHTML() string {
       <div>
         <h1>Local Metrics Explorer</h1>
         <p>Reads from the Metrics store running inside this <code>distlang local</code> process.</p>
+        <div id="capabilities"></div>
       </div>
       <button id="refresh">Refresh Metadata</button>
     </header>
@@ -431,12 +373,28 @@ func localMetricsHTML() string {
         <pre id="output">Run a query to inspect local Metrics data.</pre>
       </div>
     </section>
+    <section class="card disabled" id="sql-card" style="margin-top: 18px;">
+      <h2>SQL Query</h2>
+      <p id="sql-status">SQL is loading backend capabilities.</p>
+      <textarea id="sql-query" spellcheck="false">select metric_set, metric, kind, window_start, count, sum from metric_rows order by window_start desc limit 20</textarea>
+      <div class="toolbar"><button id="run-sql" disabled>Run SQL</button></div>
+      <pre id="sql-output">SQL results will appear here.</pre>
+      <pre id="schema">Loading schema hints...</pre>
+    </section>
   </main>
   <script>
     const metricsEl = document.querySelector("#metrics");
     const queryEl = document.querySelector("#query");
     const outputEl = document.querySelector("#output");
     const statusEl = document.querySelector("#status");
+    const capabilitiesEl = document.querySelector("#capabilities");
+    const sqlCardEl = document.querySelector("#sql-card");
+    const sqlStatusEl = document.querySelector("#sql-status");
+    const sqlQueryEl = document.querySelector("#sql-query");
+    const sqlOutputEl = document.querySelector("#sql-output");
+    const runSQLEl = document.querySelector("#run-sql");
+    const schemaEl = document.querySelector("#schema");
+    let capabilities = null;
 
     function renderJSON(value) {
       outputEl.textContent = JSON.stringify(value, null, 2);
@@ -466,6 +424,41 @@ func localMetricsHTML() string {
       statusEl.textContent = entries.length + " metric definition" + (entries.length === 1 ? "" : "s") + " loaded.";
     }
 
+    async function loadCapabilities() {
+      const response = await fetch("/distlang/metrics/v1/capabilities");
+      capabilities = await response.json();
+      const features = capabilities.features || {};
+      capabilitiesEl.innerHTML = "";
+      for (const item of ["mode", "storage", "auth"]) {
+        const span = document.createElement("span");
+        span.className = "pill";
+        span.textContent = item + ": " + capabilities[item];
+        capabilitiesEl.appendChild(span);
+      }
+      sqlCardEl.classList.toggle("disabled", !features.sql);
+      sqlStatusEl.textContent = features.sql
+        ? "SQL is available for this backend."
+        : "SQL is not available for this backend yet. This panel will activate for local SQLite and future authenticated Durable Object SQL backends.";
+      runSQLEl.disabled = !features.sql;
+      schemaEl.textContent = JSON.stringify(capabilities.schema || [], null, 2);
+    }
+
+    async function runSQL() {
+      if (!capabilities || !capabilities.features || !capabilities.features.sql) {
+        sqlStatusEl.textContent = "SQL is not available for this backend.";
+        return;
+      }
+      sqlStatusEl.textContent = "Running SQL...";
+      const response = await fetch("/distlang/metrics/v1/sql", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ query: sqlQueryEl.value, limit: 1000 }),
+      });
+      const payload = await response.json();
+      sqlOutputEl.textContent = JSON.stringify(payload, null, 2);
+      sqlStatusEl.textContent = response.ok ? "SQL complete." : "SQL failed.";
+    }
+
     async function runQuery() {
       const query = queryEl.value.trim();
       if (!query) {
@@ -481,10 +474,11 @@ func localMetricsHTML() string {
 
     document.querySelector("#refresh").addEventListener("click", loadMetadata);
     document.querySelector("#run").addEventListener("click", runQuery);
+    runSQLEl.addEventListener("click", runSQL);
     queryEl.addEventListener("keydown", (event) => {
       if (event.key === "Enter") runQuery();
     });
-    loadMetadata().catch((error) => {
+    Promise.all([loadCapabilities(), loadMetadata()]).catch((error) => {
       statusEl.textContent = "Metadata request failed.";
       outputEl.textContent = error instanceof Error ? error.message : String(error);
     });
