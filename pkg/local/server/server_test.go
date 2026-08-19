@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -49,6 +50,20 @@ func TestMetricsMetadataAndQuery(t *testing.T) {
 	}
 	if len(payload.Data.Result) != 1 || payload.Data.Result[0].Value[1] != "3" {
 		t.Fatalf("unexpected query payload: %s", queryRes.Body.String())
+	}
+}
+
+func TestMetricsExplorerHTML(t *testing.T) {
+	r := &Running{store: localmetrics.NewMemoryStore()}
+	req := httptest.NewRequest(http.MethodGet, "/distlang/metrics", nil)
+	res := httptest.NewRecorder()
+	r.handle(res, req)
+	if res.Code != http.StatusOK {
+		t.Fatalf("status: %d %s", res.Code, res.Body.String())
+	}
+	body := res.Body.String()
+	if !strings.Contains(body, "Local Metrics Explorer") || !strings.Contains(body, "/distlang/metrics/v1/api/v1/metadata") {
+		t.Fatalf("metrics explorer html missing expected content: %s", body)
 	}
 }
 

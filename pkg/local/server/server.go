@@ -78,8 +78,12 @@ func (r *Running) handle(w http.ResponseWriter, req *http.Request) {
 		path = "/"
 	}
 
-	if req.Method == http.MethodGet && (path == "/" || path == "/metrics") {
-		writeHTML(w, http.StatusOK, "<h1>Distlang Local</h1><p>Local Metrics is running.</p>")
+	if req.Method == http.MethodGet && path == "/" {
+		writeHTML(w, http.StatusOK, localHomeHTML())
+		return
+	}
+	if req.Method == http.MethodGet && path == "/metrics" {
+		writeHTML(w, http.StatusOK, localMetricsHTML())
 		return
 	}
 	if req.Method == http.MethodGet && path == "/metrics/v1/api/v1/metadata" {
@@ -344,4 +348,147 @@ func writeJSON(w http.ResponseWriter, status int, value any) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
 	_ = json.NewEncoder(w).Encode(value)
+}
+
+func localHomeHTML() string {
+	return `<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Distlang Local</title>
+  <style>
+    body { margin: 0; font-family: ui-sans-serif, system-ui, sans-serif; background: #0f172a; color: #e2e8f0; }
+    main { max-width: 760px; margin: 0 auto; padding: 64px 24px; }
+    a { color: #67e8f9; }
+    .card { margin-top: 24px; padding: 24px; border: 1px solid #334155; border-radius: 16px; background: #111827; }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>Distlang Local</h1>
+    <p>Local Distlang is running with in-memory Metrics storage.</p>
+    <div class="card">
+      <h2>Metrics</h2>
+      <p>Inspect metric definitions and run local Metrics queries.</p>
+      <p><a href="/distlang/metrics">Open Local Metrics Explorer</a></p>
+    </div>
+  </main>
+</body>
+</html>`
+}
+
+func localMetricsHTML() string {
+	return `<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Local Metrics Explorer</title>
+  <style>
+    :root { color-scheme: dark; }
+    body { margin: 0; font-family: ui-sans-serif, system-ui, sans-serif; background: #07111f; color: #dbeafe; }
+    main { max-width: 1120px; margin: 0 auto; padding: 32px 20px 56px; }
+    header { display: flex; align-items: end; justify-content: space-between; gap: 16px; margin-bottom: 24px; }
+    h1 { margin: 0; font-size: clamp(28px, 6vw, 48px); letter-spacing: -0.04em; }
+    p { color: #93a4b8; }
+    button, input { border: 1px solid #334155; border-radius: 10px; background: #0f172a; color: #e2e8f0; padding: 10px 12px; font: inherit; }
+    button { cursor: pointer; background: #155e75; border-color: #0891b2; }
+    button:hover { background: #0e7490; }
+    .grid { display: grid; grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr); gap: 18px; }
+    .card { border: 1px solid #1e3a5f; border-radius: 18px; background: linear-gradient(180deg, #0f172a, #0b1220); padding: 18px; box-shadow: 0 24px 80px rgb(0 0 0 / 0.24); }
+    .toolbar { display: flex; gap: 8px; margin: 12px 0 16px; }
+    .toolbar input { flex: 1; min-width: 0; }
+    .metric { width: 100%; text-align: left; margin: 8px 0; background: #111827; border-color: #24364f; }
+    .metric small { display: block; color: #93a4b8; margin-top: 4px; }
+    pre { overflow: auto; min-height: 220px; margin: 0; padding: 16px; border-radius: 14px; background: #020617; color: #bfdbfe; }
+    .status { min-height: 20px; margin: 8px 0 0; color: #67e8f9; }
+    @media (max-width: 800px) { header, .grid { display: block; } .card { margin-bottom: 18px; } }
+  </style>
+</head>
+<body>
+  <main>
+    <header>
+      <div>
+        <h1>Local Metrics Explorer</h1>
+        <p>Reads from the Metrics store running inside this <code>distlang local</code> process.</p>
+      </div>
+      <button id="refresh">Refresh Metadata</button>
+    </header>
+    <section class="grid">
+      <div class="card">
+        <h2>Metric Definitions</h2>
+        <p>Select a metric to build an instant query.</p>
+        <div id="metrics"></div>
+      </div>
+      <div class="card">
+        <h2>Query</h2>
+        <div class="toolbar">
+          <input id="query" spellcheck="false" placeholder='increase(trafficReqCount{metricSet="local-metrics-tests-app"}[5m])'>
+          <button id="run">Run</button>
+        </div>
+        <p class="status" id="status"></p>
+        <pre id="output">Run a query to inspect local Metrics data.</pre>
+      </div>
+    </section>
+  </main>
+  <script>
+    const metricsEl = document.querySelector("#metrics");
+    const queryEl = document.querySelector("#query");
+    const outputEl = document.querySelector("#output");
+    const statusEl = document.querySelector("#status");
+
+    function renderJSON(value) {
+      outputEl.textContent = JSON.stringify(value, null, 2);
+    }
+
+    async function loadMetadata() {
+      statusEl.textContent = "Loading metadata...";
+      const response = await fetch("/distlang/metrics/v1/api/v1/metadata");
+      const payload = await response.json();
+      const data = payload.data || {};
+      const entries = Object.entries(data).flatMap(([name, values]) => values.map((entry) => ({ name, ...entry })));
+      metricsEl.innerHTML = "";
+      if (entries.length === 0) {
+        metricsEl.innerHTML = "<p>No local metrics have been recorded yet.</p>";
+        statusEl.textContent = "No metadata yet.";
+        return;
+      }
+      for (const entry of entries) {
+        const button = document.createElement("button");
+        button.className = "metric";
+        button.innerHTML = "<strong>" + entry.name + "</strong><small>" + (entry.type || "metric") + " - " + (entry.metricSet || "unknown metric set") + "</small>";
+        button.addEventListener("click", () => {
+          queryEl.value = "increase(" + entry.name + "{metricSet=\"" + entry.metricSet + "\"}[5m])";
+        });
+        metricsEl.appendChild(button);
+      }
+      statusEl.textContent = entries.length + " metric definition" + (entries.length === 1 ? "" : "s") + " loaded.";
+    }
+
+    async function runQuery() {
+      const query = queryEl.value.trim();
+      if (!query) {
+        statusEl.textContent = "Enter a query first.";
+        return;
+      }
+      statusEl.textContent = "Running query...";
+      const response = await fetch("/distlang/metrics/v1/api/v1/query?query=" + encodeURIComponent(query));
+      const payload = await response.json();
+      renderJSON(payload);
+      statusEl.textContent = response.ok ? "Query complete." : "Query failed.";
+    }
+
+    document.querySelector("#refresh").addEventListener("click", loadMetadata);
+    document.querySelector("#run").addEventListener("click", runQuery);
+    queryEl.addEventListener("keydown", (event) => {
+      if (event.key === "Enter") runQuery();
+    });
+    loadMetadata().catch((error) => {
+      statusEl.textContent = "Metadata request failed.";
+      outputEl.textContent = error instanceof Error ? error.message : String(error);
+    });
+  </script>
+</body>
+</html>`
 }
