@@ -62,10 +62,40 @@ func TestMetricsExplorerHTML(t *testing.T) {
 		t.Fatalf("status: %d %s", res.Code, res.Body.String())
 	}
 	body := res.Body.String()
-	for _, expected := range []string{"Local Metrics Explorer", "__DISTLANG_EXPLORER_CONFIG__", "apiBasePath", "/distlang/metrics/v1", "apiPath(\"/api/v1/metadata\")", "apiPath(\"/capabilities\")", "sql-examples", "sql-table-pane", "Table", "Raw JSON"} {
+	for _, expected := range []string{"Local Metrics Explorer", "__DISTLANG_EXPLORER_CONFIG__", "Local SQLite", "Hosted Distlang", "statusPath", "/distlang/metrics/hosted/v1/status", "apiBasePath", "/distlang/metrics/v1", "apiPath(\"/api/v1/metadata\")", "apiPath(\"/capabilities\")", "sql-examples", "sql-table-pane", "Table", "Raw JSON"} {
 		if !strings.Contains(body, expected) {
 			t.Fatalf("metrics explorer html missing %q: %s", expected, body)
 		}
+	}
+}
+
+func TestHostedStatusEndpoint(t *testing.T) {
+	r := &Running{store: localmetrics.NewMemoryStore()}
+	req := httptest.NewRequest(http.MethodGet, "/distlang/metrics/hosted/v1/status", nil)
+	res := httptest.NewRecorder()
+	r.handle(res, req)
+	if res.Code != http.StatusOK {
+		t.Fatalf("status: %d %s", res.Code, res.Body.String())
+	}
+	var payload map[string]any
+	if err := json.Unmarshal(res.Body.Bytes(), &payload); err != nil {
+		t.Fatalf("decode hosted status: %v", err)
+	}
+	if _, ok := payload["loggedIn"].(bool); !ok {
+		t.Fatalf("hosted status missing loggedIn: %#v", payload)
+	}
+	if payload["storeBaseURL"] == "" || payload["authBaseURL"] == "" {
+		t.Fatalf("hosted status missing base URLs: %#v", payload)
+	}
+}
+
+func TestHostedProxyRoutesAreExplicitlyPending(t *testing.T) {
+	r := &Running{store: localmetrics.NewMemoryStore()}
+	req := httptest.NewRequest(http.MethodGet, "/distlang/metrics/hosted/v1/capabilities", nil)
+	res := httptest.NewRecorder()
+	r.handle(res, req)
+	if res.Code != http.StatusNotImplemented {
+		t.Fatalf("status: %d %s", res.Code, res.Body.String())
 	}
 }
 

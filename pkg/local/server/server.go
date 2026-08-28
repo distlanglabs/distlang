@@ -12,7 +12,9 @@ import (
 	"strings"
 	"time"
 
+	"github.com/distlanglabs/distlang/pkg/auth"
 	localmetrics "github.com/distlanglabs/distlang/pkg/local/metrics"
+	storeapi "github.com/distlanglabs/distlang/pkg/store"
 )
 
 type Config struct {
@@ -115,6 +117,14 @@ func (r *Running) handle(w http.ResponseWriter, req *http.Request) {
 	}
 	if req.Method == http.MethodPost && path == "/metrics/v1/sql" {
 		r.handleSQL(w, req)
+		return
+	}
+	if req.Method == http.MethodGet && path == "/metrics/hosted/v1/status" {
+		r.handleHostedStatus(w, req)
+		return
+	}
+	if strings.HasPrefix(path, "/metrics/hosted/v1/") {
+		writeJSON(w, http.StatusNotImplemented, map[string]any{"error": "hosted_not_implemented", "message": "Hosted Metrics querying from the local explorer is not wired yet."})
 		return
 	}
 	if strings.HasPrefix(path, "/metrics/v1/metricsets/") {
@@ -257,6 +267,35 @@ func (r *Running) handleSQL(w http.ResponseWriter, req *http.Request) {
 	writeJSON(w, http.StatusOK, result)
 }
 
+func (r *Running) handleHostedStatus(w http.ResponseWriter, req *http.Request) {
+	session, err := auth.LoadSession()
+	if err != nil {
+		status := map[string]any{
+			"ok":           true,
+			"loggedIn":     false,
+			"message":      "Run `distlang helpers login` to query hosted Metrics from this explorer.",
+			"authBaseURL":  auth.ResolveBaseURL(),
+			"storeBaseURL": storeapi.ResolveBaseURL(),
+		}
+		if !errors.Is(err, auth.ErrNotLoggedIn) {
+			status["ok"] = false
+			status["error"] = "auth_status_failed"
+			status["message"] = err.Error()
+		}
+		writeJSON(w, http.StatusOK, status)
+		return
+	}
+
+	user := map[string]string{"id": session.User.ID, "email": session.User.Email, "name": session.User.Name}
+	writeJSON(w, http.StatusOK, map[string]any{
+		"ok":           true,
+		"loggedIn":     strings.TrimSpace(session.AccessToken) != "",
+		"user":         user,
+		"authBaseURL":  auth.ResolveBaseURL(),
+		"storeBaseURL": storeapi.ResolveBaseURL(),
+	})
+}
+
 func readJSON(req *http.Request, out any) error {
 	body, err := io.ReadAll(io.LimitReader(req.Body, 10<<20))
 	if err != nil {
@@ -343,6 +382,9 @@ func localMetricsHTML() string {
     pre { overflow: auto; min-height: 220px; margin: 0; padding: 16px; border-radius: 14px; background: #020617; color: #bfdbfe; }
     .status { min-height: 20px; margin: 8px 0 0; color: #67e8f9; }
     .pill { display: inline-flex; gap: 6px; align-items: center; margin: 4px 6px 0 0; padding: 5px 9px; border: 1px solid #1e3a5f; border-radius: 999px; background: #0f172a; color: #bae6fd; font-size: 13px; }
+    .sourcebar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-top: 14px; }
+    .source { background: #111827; border-color: #24364f; }
+    .source.active { background: #155e75; border-color: #0891b2; }
     .disabled { opacity: 0.6; }
     .tabs { display: flex; gap: 8px; margin: 10px 0; }
     .tab { background: #111827; border-color: #24364f; }
@@ -363,8 +405,9 @@ func localMetricsHTML() string {
     <header>
       <div>
         <h1>Local Metrics Explorer</h1>
-        <p>Reads from the Metrics store running inside this <code>distlang local</code> process.</p>
+        <p>Inspect local Metrics data or switch to hosted account data through this <code>distlang local</code> explorer.</p>
         <div id="capabilities"></div>
+        <div class="sourcebar" id="sources"></div>
       </div>
       <button id="refresh">Refresh Metadata</button>
     </header>
@@ -410,17 +453,25 @@ func localMetricsHTML() string {
           mode: "local",
           auth: false,
           apiBasePath: "/distlang/metrics/v1"
+        },
+        hosted: {
+          label: "Hosted Distlang",
+          mode: "hosted",
+          auth: true,
+          apiBasePath: "/distlang/metrics/hosted/v1",
+          statusPath: "/distlang/metrics/hosted/v1/status"
         }
       }
     };
     const explorerConfig = window.__DISTLANG_EXPLORER_CONFIG__;
-    const activeSource = explorerConfig.sources[explorerConfig.defaultSource];
-    const apiBasePath = activeSource.apiBasePath.replace(/\/$/, "");
+    let activeSourceName = explorerConfig.defaultSource;
+    let activeSource = explorerConfig.sources[activeSourceName];
     const metricsEl = document.querySelector("#metrics");
     const queryEl = document.querySelector("#query");
     const outputEl = document.querySelector("#output");
     const statusEl = document.querySelector("#status");
     const capabilitiesEl = document.querySelector("#capabilities");
+    const sourcesEl = document.querySelector("#sources");
     const sqlCardEl = document.querySelector("#sql-card");
     const sqlStatusEl = document.querySelector("#sql-status");
     const sqlQueryEl = document.querySelector("#sql-query");
@@ -434,7 +485,56 @@ func localMetricsHTML() string {
     let capabilities = null;
 
     function apiPath(path) {
-      return apiBasePath + path;
+      return activeSource.apiBasePath.replace(/\/$/, "") + path;
+    }
+
+    function renderSources() {
+      sourcesEl.innerHTML = "";
+      for (const [name, source] of Object.entries(explorerConfig.sources || {})) {
+        const button = document.createElement("button");
+        button.className = "source" + (name === activeSourceName ? " active" : "");
+        button.type = "button";
+        button.textContent = source.label || name;
+        button.addEventListener("click", () => switchSource(name));
+        sourcesEl.appendChild(button);
+      }
+    }
+
+    async function switchSource(name) {
+      activeSourceName = name;
+      activeSource = explorerConfig.sources[name];
+      capabilities = null;
+      renderSources();
+      metricsEl.innerHTML = "";
+      outputEl.textContent = "Run a query to inspect " + (activeSource.label || name) + " Metrics data.";
+      sqlTablePaneEl.innerHTML = '<p class="empty">SQL table results will appear here.</p>';
+      sqlOutputEl.textContent = "Raw SQL JSON will appear here.";
+      await Promise.all([loadCapabilities(), loadMetadata()]);
+    }
+
+    async function ensureHostedReady() {
+      if (activeSource.mode !== "hosted") return true;
+      const response = await fetch(activeSource.statusPath);
+      const status = await response.json();
+      if (status.loggedIn) {
+        statusEl.textContent = "Hosted account loaded" + (status.user && status.user.email ? ": " + status.user.email : ".");
+        return true;
+      }
+      capabilities = { mode: "hosted", storage: "durable_object_sqlite", auth: true, features: { metadata: false, query: false, queryRange: false, sql: false }, schema: [] };
+      capabilitiesEl.innerHTML = "";
+      for (const item of ["mode", "storage", "auth"]) {
+        const span = document.createElement("span");
+        span.className = "pill";
+        span.textContent = item + ": " + capabilities[item];
+        capabilitiesEl.appendChild(span);
+      }
+      metricsEl.innerHTML = "<p>Hosted Metrics requires CLI auth. Run <code>distlang helpers login</code>, then refresh this explorer.</p>";
+      statusEl.textContent = status.message || "Hosted Metrics requires login.";
+      sqlStatusEl.textContent = "Hosted SQL requires login.";
+      runSQLEl.disabled = true;
+      renderSQLExamples([], false);
+      schemaEl.textContent = "[]";
+      return false;
     }
 
     function renderJSON(value) {
@@ -530,9 +630,15 @@ func localMetricsHTML() string {
     }
 
     async function loadMetadata() {
+      if (!(await ensureHostedReady())) return;
       statusEl.textContent = "Loading metadata...";
       const response = await fetch(apiPath("/api/v1/metadata"));
       const payload = await response.json();
+      if (!response.ok) {
+        metricsEl.innerHTML = "<p>Metadata is not available for this source yet.</p>";
+        statusEl.textContent = payload.message || "Metadata request failed.";
+        return;
+      }
       const data = payload.data || {};
       const entries = Object.entries(data).flatMap(([name, values]) => values.map((entry) => ({ name, ...entry })));
       metricsEl.innerHTML = "";
@@ -554,7 +660,17 @@ func localMetricsHTML() string {
     }
 
     async function loadCapabilities() {
+      if (!(await ensureHostedReady())) return;
       const response = await fetch(apiPath("/capabilities"));
+      if (!response.ok) {
+        const payload = await response.json().catch(() => ({}));
+        capabilities = { mode: activeSource.mode, storage: "unavailable", auth: !!activeSource.auth, features: { metadata: false, query: false, queryRange: false, sql: false }, schema: [] };
+        sqlStatusEl.textContent = payload.message || "Metrics source is not available yet.";
+        runSQLEl.disabled = true;
+        renderSQLExamples([], false);
+        schemaEl.textContent = JSON.stringify(payload, null, 2);
+        return;
+      }
       capabilities = await response.json();
       const features = capabilities.features || {};
       capabilitiesEl.innerHTML = "";
@@ -619,6 +735,7 @@ func localMetricsHTML() string {
     queryEl.addEventListener("keydown", (event) => {
       if (event.key === "Enter") runQuery();
     });
+    renderSources();
     Promise.all([loadCapabilities(), loadMetadata()]).catch((error) => {
       statusEl.textContent = "Metadata request failed.";
       outputEl.textContent = error instanceof Error ? error.message : String(error);
