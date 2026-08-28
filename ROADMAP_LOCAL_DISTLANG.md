@@ -170,6 +170,72 @@ Schema discovery commands are handled as safe meta-commands:
 
 The explorer renders SQL results as a readable table by default and keeps a raw JSON view for debugging the exact API payload.
 
+## Hosted Explorer Plan
+
+The local explorer should continue to start the same way:
+
+```bash
+distlang local
+```
+
+From that same browser UI, users should be able to switch between local SQLite data and hosted account data. The hosted path should feel like the local path with authentication added, not like a separate product or separate explorer.
+
+Public explorer-facing endpoints should remain metric-set agnostic:
+
+- `GET /distlang/metrics/v1/capabilities`
+- `GET /distlang/metrics/v1/api/v1/metadata`
+- `GET /distlang/metrics/v1/api/v1/query`
+- `GET /distlang/metrics/v1/api/v1/query_range`
+- `POST /distlang/metrics/v1/sql`
+
+The local process may proxy hosted calls through source-specific local routes to avoid exposing tokens to browser JavaScript and to avoid CORS issues. The remote API itself should still mirror the local explorer contract and require normal hosted authentication.
+
+Metric sets should be abstracted as data, not as required route segments in the explorer contract. The explorer and queries can still expose metric sets through metadata, labels, SQL predicates, or UI selection:
+
+- Prom-style queries use labels such as `metricSet="my-app"`
+- SQL can query `metric_sets` or filter with `where metric_set = 'my-app'`
+- Explorer source state can track the selected metric set without changing endpoint names
+
+Hosted implementation should use a query gateway over Durable Object SQLite storage:
+
+- The gateway authenticates the user using normal hosted auth
+- The gateway discovers metric sets available to the account
+- The gateway routes narrow queries to one `MetricsTimeBucketDO` when possible
+- The gateway can fan out simple metadata/sample queries across metric sets where needed
+- Each `MetricsTimeBucketDO` keeps owning its SQLite database for one user and metric set
+- SQL responses must use the same `columns`, `rows`, and `stats` shape as local SQLite
+
+The Durable Object SQL support should be implemented as a storage/query plugin, not hardcoded into the explorer:
+
+- `LocalSQLiteQueryBackend` for local CLI SQLite
+- `DurableObjectSQLiteQueryBackend` for hosted Metrics Durable Objects
+- Future backends can implement the same capabilities/query/SQL contract
+
+Hosted SQL should expose a virtual schema where useful. The physical Durable Object tables may differ from local tables, but explorer-facing capabilities should describe what users can query. A hosted `metric_rows` view should include a `metric_set` column even when that value is synthetic from the routed Durable Object.
+
+Initial hosted SQL should prioritize practical read-only queries:
+
+- `show tables;`
+- `describe <table>;`
+- `select * from metric_sets`
+- `select * from metric_rows where metric_set = 'my-app' limit 20`
+- simple aggregate queries with a metric-set filter
+- limited cross-metric-set metadata and sample-row queries when the gateway can safely merge results
+
+Full arbitrary cross-Durable Object SQL federation is explicitly later work. If a query cannot be safely routed or merged, the gateway should return a clear error suggesting a `metric_set` filter.
+
+Hosted mode should keep the same permissions as existing hosted read/query access. If an authenticated user can read/query a metric set, they can run read-only SQL for that metric set. There should be no separate SQL role or extra permission layer. Safety guardrails still apply because they protect storage integrity and service health, not because they are a separate permission model.
+
+Implementation phases:
+
+1. Make the explorer use a configurable API base instead of hardcoded local paths.
+2. Add a source switcher for Local SQLite and Hosted Distlang inside the existing explorer.
+3. Generate SQL shortcut examples from `capabilities.schema` instead of hardcoded table names.
+4. Add local hosted-proxy routes in `distlang local` that use existing CLI auth state.
+5. Add hosted authenticated explorer-contract endpoints that mirror the local endpoint names.
+6. Add Durable Object capabilities and read-only SQL execution behind the hosted query gateway.
+7. Add tests proving local and hosted return the same response shapes for capabilities, metadata, Prom-style query, and SQL table results.
+
 ## Shared Metrics Core
 
 Extract reusable Metrics logic from `do-service` while keeping production behavior unchanged:
@@ -324,3 +390,15 @@ Status: pending.
 - Update install script final output
 - Add `/docs/metrics/local`
 - Add hosted/local mode chooser links
+
+### Milestone 7: Hosted Data Source In Local Explorer
+
+Status: planned.
+
+- Refactor explorer JavaScript to use configurable endpoint bases
+- Add a Local SQLite / Hosted Distlang source switcher
+- Proxy hosted requests through the local `distlang local` process using CLI auth
+- Keep explorer-facing endpoint names aligned between local and hosted
+- Abstract metric sets as metadata/query data instead of route structure
+- Add hosted capabilities and SQL support through a Durable Object SQLite query backend
+- Preserve identical SQL table/raw result rendering for local and hosted responses
