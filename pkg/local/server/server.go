@@ -336,7 +336,7 @@ func localMetricsHTML() string {
     button:hover { background: #0e7490; }
     .grid { display: grid; grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr); gap: 18px; }
     .card { border: 1px solid #1e3a5f; border-radius: 18px; background: linear-gradient(180deg, #0f172a, #0b1220); padding: 18px; box-shadow: 0 24px 80px rgb(0 0 0 / 0.24); }
-    .toolbar { display: flex; gap: 8px; margin: 12px 0 16px; }
+    .toolbar { display: flex; flex-wrap: wrap; gap: 8px; margin: 12px 0 16px; }
     .toolbar input { flex: 1; min-width: 0; }
     .metric { width: 100%; text-align: left; margin: 8px 0; background: #111827; border-color: #24364f; }
     .metric small { display: block; color: #93a4b8; margin-top: 4px; }
@@ -344,6 +344,17 @@ func localMetricsHTML() string {
     .status { min-height: 20px; margin: 8px 0 0; color: #67e8f9; }
     .pill { display: inline-flex; gap: 6px; align-items: center; margin: 4px 6px 0 0; padding: 5px 9px; border: 1px solid #1e3a5f; border-radius: 999px; background: #0f172a; color: #bae6fd; font-size: 13px; }
     .disabled { opacity: 0.6; }
+    .tabs { display: flex; gap: 8px; margin: 10px 0; }
+    .tab { background: #111827; border-color: #24364f; }
+    .tab.active { background: #155e75; border-color: #0891b2; }
+    .result-pane { display: none; }
+    .result-pane.active { display: block; }
+    .table-wrap { max-height: 520px; overflow: auto; border: 1px solid #1e3a5f; border-radius: 14px; background: #020617; }
+    table { width: 100%; border-collapse: separate; border-spacing: 0; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; font-size: 13px; }
+    th, td { padding: 9px 11px; border-bottom: 1px solid #13253c; text-align: left; vertical-align: top; white-space: nowrap; }
+    th { position: sticky; top: 0; z-index: 1; background: #0f172a; color: #93c5fd; font-weight: 650; }
+    td.null { color: #64748b; font-style: italic; }
+    .empty { margin: 0; padding: 16px; color: #93a4b8; }
     @media (max-width: 800px) { header, .grid { display: block; } .card { margin-bottom: 18px; } }
   </style>
 </head>
@@ -383,7 +394,12 @@ func localMetricsHTML() string {
         <button class="sql-example" data-sql="describe metric_rows;" disabled>Describe metric_rows</button>
         <button class="sql-example" data-sql="select metric_set, metric, kind, window_start, count, sum from metric_rows order by window_start desc limit 20" disabled>Sample Rows</button>
       </div>
-      <pre id="sql-output">SQL results will appear here.</pre>
+      <div class="tabs" aria-label="SQL result view">
+        <button class="tab active" id="sql-table-tab" type="button">Table</button>
+        <button class="tab" id="sql-raw-tab" type="button">Raw JSON</button>
+      </div>
+      <div class="result-pane active" id="sql-table-pane"><p class="empty">SQL table results will appear here.</p></div>
+      <pre class="result-pane" id="sql-output">Raw SQL JSON will appear here.</pre>
       <pre id="schema">Loading schema hints...</pre>
     </section>
   </main>
@@ -397,6 +413,9 @@ func localMetricsHTML() string {
     const sqlStatusEl = document.querySelector("#sql-status");
     const sqlQueryEl = document.querySelector("#sql-query");
     const sqlOutputEl = document.querySelector("#sql-output");
+    const sqlTablePaneEl = document.querySelector("#sql-table-pane");
+    const sqlTableTabEl = document.querySelector("#sql-table-tab");
+    const sqlRawTabEl = document.querySelector("#sql-raw-tab");
     const runSQLEl = document.querySelector("#run-sql");
     const sqlExampleEls = Array.from(document.querySelectorAll(".sql-example"));
     const schemaEl = document.querySelector("#schema");
@@ -404,6 +423,62 @@ func localMetricsHTML() string {
 
     function renderJSON(value) {
       outputEl.textContent = JSON.stringify(value, null, 2);
+    }
+
+    function setSQLView(view) {
+      const tableActive = view === "table";
+      sqlTableTabEl.classList.toggle("active", tableActive);
+      sqlRawTabEl.classList.toggle("active", !tableActive);
+      sqlTablePaneEl.classList.toggle("active", tableActive);
+      sqlOutputEl.classList.toggle("active", !tableActive);
+    }
+
+    function formatSQLCell(value) {
+      if (value === null || value === undefined) return "NULL";
+      if (typeof value === "object") return JSON.stringify(value);
+      return String(value);
+    }
+
+    function renderSQLTable(payload) {
+      const columns = Array.isArray(payload.columns) ? payload.columns : [];
+      const rows = Array.isArray(payload.rows) ? payload.rows : [];
+      if (columns.length === 0) {
+        sqlTablePaneEl.innerHTML = '<p class="empty">No columns returned.</p>';
+        return;
+      }
+      const wrapper = document.createElement("div");
+      wrapper.className = "table-wrap";
+      const table = document.createElement("table");
+      const thead = document.createElement("thead");
+      const headerRow = document.createElement("tr");
+      for (const column of columns) {
+        const th = document.createElement("th");
+        th.textContent = column.name || "column";
+        if (column.type) th.title = column.type;
+        headerRow.appendChild(th);
+      }
+      thead.appendChild(headerRow);
+      table.appendChild(thead);
+      const tbody = document.createElement("tbody");
+      for (const row of rows) {
+        const tr = document.createElement("tr");
+        for (let i = 0; i < columns.length; i++) {
+          const td = document.createElement("td");
+          const value = Array.isArray(row) ? row[i] : null;
+          td.textContent = formatSQLCell(value);
+          if (value === null || value === undefined) td.className = "null";
+          tr.appendChild(td);
+        }
+        tbody.appendChild(tr);
+      }
+      table.appendChild(tbody);
+      wrapper.appendChild(table);
+      sqlTablePaneEl.innerHTML = "";
+      if (rows.length === 0) {
+        sqlTablePaneEl.innerHTML = '<p class="empty">Query returned 0 rows.</p>';
+        return;
+      }
+      sqlTablePaneEl.appendChild(wrapper);
     }
 
     async function loadMetadata() {
@@ -463,7 +538,16 @@ func localMetricsHTML() string {
       });
       const payload = await response.json();
       sqlOutputEl.textContent = JSON.stringify(payload, null, 2);
-      sqlStatusEl.textContent = response.ok ? "SQL complete." : "SQL failed.";
+      if (response.ok) {
+        renderSQLTable(payload);
+        const stats = payload.stats || {};
+        sqlStatusEl.textContent = "SQL complete. " + (stats.rowCount || 0) + " rows in " + (stats.durationMs || 0) + "ms.";
+        setSQLView("table");
+      } else {
+        sqlTablePaneEl.innerHTML = '<p class="empty">SQL failed. Open Raw JSON for details.</p>';
+        sqlStatusEl.textContent = "SQL failed.";
+        setSQLView("raw");
+      }
     }
 
     async function runQuery() {
@@ -482,6 +566,8 @@ func localMetricsHTML() string {
     document.querySelector("#refresh").addEventListener("click", loadMetadata);
     document.querySelector("#run").addEventListener("click", runQuery);
     runSQLEl.addEventListener("click", runSQL);
+    sqlTableTabEl.addEventListener("click", () => setSQLView("table"));
+    sqlRawTabEl.addEventListener("click", () => setSQLView("raw"));
     for (const button of sqlExampleEls) {
       button.addEventListener("click", () => {
         sqlQueryEl.value = button.dataset.sql || "";

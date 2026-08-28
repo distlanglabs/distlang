@@ -4,6 +4,30 @@
 
 Make `distlang local` provide an unauthenticated local Distlang experience at `/distlang`, backed by local SQLite owned by the installed `distlang` tool, so users can record and explore Metrics without a Distlang account.
 
+## Current Status
+
+Local Distlang is implemented as a single-process local Metrics stack inside the `distlang` binary:
+
+- `distlang local` starts a local server on `127.0.0.1:4817` by default
+- The local home is served at `http://127.0.0.1:4817/distlang`
+- The local Metrics explorer is served at `http://127.0.0.1:4817/distlang/metrics`
+- SQLite is the default local Metrics store
+- The default database path is `~/.distlang/local/metrics.db`
+- `--db=PATH` can point local storage at a specific SQLite file
+- `--memory` keeps the in-memory test/development backend available
+- Users do not need to install SQLite separately
+- Local Metrics APIs are unauthenticated
+
+The current local explorer is embedded in the CLI server. It supports:
+
+- Metadata browsing
+- Prom-style instant queries
+- SQL queries against the local SQLite metrics tables
+- Table and raw JSON result views for SQL output
+- SQL shortcut buttons for common schema/data inspection
+
+The longer-term dashboard component extraction remains future UX polish, not a prerequisite for local Metrics to function.
+
 ## UX Decision
 
 Hosted Distlang remains the production and team path:
@@ -59,6 +83,8 @@ Initial behavior:
 - Create or open the local database automatically
 - Store local data under `~/.distlang/local/`
 - Print the local URL and database path
+- Use SQLite by default, unless `--memory` is supplied
+- Accept `--db=PATH` for an explicit local SQLite file
 
 Potential later subcommands:
 
@@ -77,6 +103,8 @@ Serve local Distlang pages and APIs without auth:
 
 - `/distlang`
 - `/distlang/metrics`
+- `/distlang/metrics/v1/capabilities`
+- `/distlang/metrics/v1/sql`
 - `/distlang/metrics/v1/api/v1/metadata`
 - `/distlang/metrics/v1/api/v1/query`
 - `/distlang/metrics/v1/api/v1/query_range`
@@ -88,6 +116,20 @@ The local server should run inside the `distlang local` process. Users should no
 
 The local server should eventually become a unified local home for Distlang products, starting with Metrics and later including Agent Debugger.
 
+## Query Backend Contract
+
+Local Metrics now uses a backend-agnostic query contract so the explorer can work with local SQLite today and a future authenticated remote SQL backend later.
+
+The contract includes:
+
+- Capabilities discovery
+- Metadata requests
+- Instant query requests
+- Range query requests
+- SQL query requests
+
+The `/distlang/metrics/v1/capabilities` endpoint tells the explorer which features are available for the active backend. The SQLite backend reports SQL support; the in-memory backend keeps SQL disabled.
+
 ## Local Storage Model
 
 SQLite should be an implementation detail of the installed `distlang` tool.
@@ -95,6 +137,38 @@ SQLite should be an implementation detail of the installed `distlang` tool.
 Users should not need to install SQLite, run a separate database, or start a separate service. `distlang local` should create and manage the database file under `~/.distlang/local/`.
 
 The local Metrics API should depend on a small store interface so the HTTP server is not coupled directly to SQLite. The first implementation is SQLite-backed local storage; tests may use an in-memory implementation.
+
+Current SQLite tables:
+
+- `metric_sets`
+- `metric_definitions`
+- `metric_rows`
+- `metric_row_values`
+
+The SQLite store persists metric definitions and emitted metric rows. Prom-style local queries run through the shared query backend, while raw SQL queries execute against the same SQLite database with read-only guardrails.
+
+## Local SQL Explorer
+
+The local explorer supports read-only SQL through `/distlang/metrics/v1/sql`.
+
+Supported SQL behavior:
+
+- `SELECT` and `WITH` queries are allowed
+- Multiple SQL statements are rejected
+- Write/schema/database-management tokens are blocked
+- Result rows are capped by a server-side maximum
+- Query execution uses a short timeout
+
+Schema discovery commands are handled as safe meta-commands:
+
+- `show tables;`
+- `.tables`
+- `describe <table>;`
+- `describe table <table>;`
+- `desc <table>;`
+- `.schema <table>`
+
+The explorer renders SQL results as a readable table by default and keeps a raw JSON view for debugging the exact API payload.
 
 ## Shared Metrics Core
 
@@ -114,14 +188,23 @@ Production `do-service` keeps Durable Object-backed storage. Local Distlang uses
 
 Do not export `distlang.com` as the local explorer UI. `distlang.com` should remain marketing and docs.
 
-Instead:
+Long term:
 
 - Reuse pieces from `dash/src/lib/metrics`
 - Extract reusable Metrics Explorer components from `dash`
 - Keep the hosted dashboard page as an auth-aware wrapper
 - Add a local explorer wrapper with no auth and localStorage persistence
 
-The local explorer should:
+Current implementation:
+
+- Embedded local explorer served by `distlang local`
+- Metadata list from local Metrics metadata
+- Prom-style instant query input
+- SQL query textarea
+- SQL shortcuts for schema and sample row inspection
+- Table/raw JSON SQL result views
+
+The future extracted explorer should:
 
 - List metric sets from metadata
 - Let the user choose a metric set
@@ -190,11 +273,15 @@ Better future API:
 
 ### Milestone 1: Roadmap And Docs Skeleton
 
+Status: implemented.
+
 - Add this roadmap
 - Link it from the main roadmap
 - Add the local quickstart only when it is implemented or clearly marked upcoming
 
 ### Milestone 2: Metrics Core Extraction
+
+Status: partially implemented.
 
 - Extract reusable query and data logic from `do-service`
 - Keep production behavior unchanged
@@ -202,25 +289,37 @@ Better future API:
 
 ### Milestone 3: Local SQLite Metrics API
 
+Status: implemented for local Metrics write, metadata, instant query, range-query API surface, and SQL query support.
+
 - Add a local Metrics store abstraction inside `distlang`
 - Back the first local store with SQLite owned by the installed `distlang` binary
 - Store database files under `~/.distlang/local/`
 - Add unauthenticated local metrics endpoints
 - Verify writes, metadata, instant query, and range query
+- Add SQL capabilities and read-only SQL endpoint
+- Add schema discovery meta-commands
 
 ### Milestone 4: Local Explorer UI
+
+Status: implemented as an embedded local explorer; dashboard component extraction remains future polish.
 
 - Extract reusable explorer components
 - Add a local data source
 - Serve at `/distlang/metrics`
+- Add SQL table/raw views and schema shortcuts
 
 ### Milestone 5: CLI Integration
+
+Status: implemented.
 
 - Add `distlang local`
 - Open the browser by default
 - Print local URLs and database path
+- Add `--db=PATH` and `--memory`
 
 ### Milestone 6: Docs And Install Polish
+
+Status: pending.
 
 - Update install script final output
 - Add `/docs/metrics/local`
