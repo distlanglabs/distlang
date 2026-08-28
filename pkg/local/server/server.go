@@ -390,9 +390,7 @@ func localMetricsHTML() string {
       <textarea id="sql-query" spellcheck="false">select metric_set, metric, kind, window_start, count, sum from metric_rows order by window_start desc limit 20</textarea>
       <div class="toolbar">
         <button id="run-sql" disabled>Run SQL</button>
-        <button class="sql-example" data-sql="show tables;" disabled>Show Tables</button>
-        <button class="sql-example" data-sql="describe metric_rows;" disabled>Describe metric_rows</button>
-        <button class="sql-example" data-sql="select metric_set, metric, kind, window_start, count, sum from metric_rows order by window_start desc limit 20" disabled>Sample Rows</button>
+        <span class="toolbar" id="sql-examples"></span>
       </div>
       <div class="tabs" aria-label="SQL result view">
         <button class="tab active" id="sql-table-tab" type="button">Table</button>
@@ -404,6 +402,20 @@ func localMetricsHTML() string {
     </section>
   </main>
   <script>
+    window.__DISTLANG_EXPLORER_CONFIG__ = {
+      defaultSource: "local",
+      sources: {
+        local: {
+          label: "Local SQLite",
+          mode: "local",
+          auth: false,
+          apiBasePath: "/distlang/metrics/v1"
+        }
+      }
+    };
+    const explorerConfig = window.__DISTLANG_EXPLORER_CONFIG__;
+    const activeSource = explorerConfig.sources[explorerConfig.defaultSource];
+    const apiBasePath = activeSource.apiBasePath.replace(/\/$/, "");
     const metricsEl = document.querySelector("#metrics");
     const queryEl = document.querySelector("#query");
     const outputEl = document.querySelector("#output");
@@ -417,9 +429,13 @@ func localMetricsHTML() string {
     const sqlTableTabEl = document.querySelector("#sql-table-tab");
     const sqlRawTabEl = document.querySelector("#sql-raw-tab");
     const runSQLEl = document.querySelector("#run-sql");
-    const sqlExampleEls = Array.from(document.querySelectorAll(".sql-example"));
+    const sqlExamplesEl = document.querySelector("#sql-examples");
     const schemaEl = document.querySelector("#schema");
     let capabilities = null;
+
+    function apiPath(path) {
+      return apiBasePath + path;
+    }
 
     function renderJSON(value) {
       outputEl.textContent = JSON.stringify(value, null, 2);
@@ -481,9 +497,41 @@ func localMetricsHTML() string {
       sqlTablePaneEl.appendChild(wrapper);
     }
 
+    function renderSQLExamples(schema, enabled) {
+      const tables = Array.isArray(schema) ? schema : [];
+      const tableNames = tables.map((table) => table.name).filter(Boolean);
+      const sampleTable = tableNames.includes("metric_rows") ? "metric_rows" : tableNames[0];
+      const examples = [{ label: "Show Tables", sql: "show tables;" }];
+      if (sampleTable) {
+        examples.push({ label: "Describe " + sampleTable, sql: "describe " + sampleTable + ";" });
+        examples.push({ label: "Sample Rows", sql: sampleRowsSQL(tables.find((table) => table.name === sampleTable) || { name: sampleTable }) });
+      }
+      sqlExamplesEl.innerHTML = "";
+      for (const example of examples) {
+        const button = document.createElement("button");
+        button.className = "sql-example";
+        button.type = "button";
+        button.disabled = !enabled;
+        button.textContent = example.label;
+        button.addEventListener("click", () => {
+          sqlQueryEl.value = example.sql;
+          runSQL();
+        });
+        sqlExamplesEl.appendChild(button);
+      }
+    }
+
+    function sampleRowsSQL(table) {
+      const columns = Array.isArray(table.columns) && table.columns.length > 0 ? table.columns : ["*"];
+      const projection = columns.includes("*") ? "*" : columns.slice(0, 8).join(", ");
+      const orderColumn = columns.includes("window_start") ? "window_start" : columns.includes("ts") ? "ts" : "";
+      const orderBy = orderColumn ? " order by " + orderColumn + " desc" : "";
+      return "select " + projection + " from " + table.name + orderBy + " limit 20";
+    }
+
     async function loadMetadata() {
       statusEl.textContent = "Loading metadata...";
-      const response = await fetch("/distlang/metrics/v1/api/v1/metadata");
+      const response = await fetch(apiPath("/api/v1/metadata"));
       const payload = await response.json();
       const data = payload.data || {};
       const entries = Object.entries(data).flatMap(([name, values]) => values.map((entry) => ({ name, ...entry })));
@@ -506,7 +554,7 @@ func localMetricsHTML() string {
     }
 
     async function loadCapabilities() {
-      const response = await fetch("/distlang/metrics/v1/capabilities");
+      const response = await fetch(apiPath("/capabilities"));
       capabilities = await response.json();
       const features = capabilities.features || {};
       capabilitiesEl.innerHTML = "";
@@ -521,8 +569,8 @@ func localMetricsHTML() string {
         ? "SQL is available for this backend."
         : "SQL is not available for this backend yet. This panel will activate for local SQLite and future authenticated Durable Object SQL backends.";
       runSQLEl.disabled = !features.sql;
-      for (const button of sqlExampleEls) button.disabled = !features.sql;
       schemaEl.textContent = JSON.stringify(capabilities.schema || [], null, 2);
+      renderSQLExamples(capabilities.schema || [], features.sql);
     }
 
     async function runSQL() {
@@ -531,7 +579,7 @@ func localMetricsHTML() string {
         return;
       }
       sqlStatusEl.textContent = "Running SQL...";
-      const response = await fetch("/distlang/metrics/v1/sql", {
+      const response = await fetch(apiPath("/sql"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ query: sqlQueryEl.value, limit: 1000 }),
@@ -557,7 +605,7 @@ func localMetricsHTML() string {
         return;
       }
       statusEl.textContent = "Running query...";
-      const response = await fetch("/distlang/metrics/v1/api/v1/query?query=" + encodeURIComponent(query));
+      const response = await fetch(apiPath("/api/v1/query") + "?query=" + encodeURIComponent(query));
       const payload = await response.json();
       renderJSON(payload);
       statusEl.textContent = response.ok ? "Query complete." : "Query failed.";
@@ -568,12 +616,6 @@ func localMetricsHTML() string {
     runSQLEl.addEventListener("click", runSQL);
     sqlTableTabEl.addEventListener("click", () => setSQLView("table"));
     sqlRawTabEl.addEventListener("click", () => setSQLView("raw"));
-    for (const button of sqlExampleEls) {
-      button.addEventListener("click", () => {
-        sqlQueryEl.value = button.dataset.sql || "";
-        runSQL();
-      });
-    }
     queryEl.addEventListener("keydown", (event) => {
       if (event.key === "Enter") runQuery();
     });

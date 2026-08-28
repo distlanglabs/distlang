@@ -62,7 +62,7 @@ func TestMetricsExplorerHTML(t *testing.T) {
 		t.Fatalf("status: %d %s", res.Code, res.Body.String())
 	}
 	body := res.Body.String()
-	for _, expected := range []string{"Local Metrics Explorer", "/distlang/metrics/v1/api/v1/metadata", "/distlang/metrics/v1/capabilities", "sql-table-pane", "Table", "Raw JSON"} {
+	for _, expected := range []string{"Local Metrics Explorer", "__DISTLANG_EXPLORER_CONFIG__", "apiBasePath", "/distlang/metrics/v1", "apiPath(\"/api/v1/metadata\")", "apiPath(\"/capabilities\")", "sql-examples", "sql-table-pane", "Table", "Raw JSON"} {
 		if !strings.Contains(body, expected) {
 			t.Fatalf("metrics explorer html missing %q: %s", expected, body)
 		}
