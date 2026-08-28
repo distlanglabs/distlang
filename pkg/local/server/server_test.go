@@ -3,6 +3,7 @@ package server
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -89,13 +90,41 @@ func TestHostedStatusEndpoint(t *testing.T) {
 	}
 }
 
-func TestHostedProxyRoutesAreExplicitlyPending(t *testing.T) {
-	r := &Running{store: localmetrics.NewMemoryStore()}
+func TestHostedProxyRequiresLogin(t *testing.T) {
+	r := &Running{store: localmetrics.NewMemoryStore(), hostedToken: func() (string, error) { return "", errors.New("not logged in") }}
 	req := httptest.NewRequest(http.MethodGet, "/distlang/metrics/hosted/v1/capabilities", nil)
 	res := httptest.NewRecorder()
 	r.handle(res, req)
-	if res.Code != http.StatusNotImplemented {
+	if res.Code != http.StatusUnauthorized {
 		t.Fatalf("status: %d %s", res.Code, res.Body.String())
+	}
+}
+
+func TestHostedProxyForwardsWithBearerToken(t *testing.T) {
+	remote := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+		if req.URL.Path != "/distlang/metrics/v1/capabilities" {
+			t.Fatalf("unexpected path: %s", req.URL.Path)
+		}
+		if got := req.Header.Get("Authorization"); got != "Bearer access-token" {
+			t.Fatalf("authorization: %s", got)
+		}
+		writeJSON(w, http.StatusOK, map[string]any{"mode": "hosted", "storage": "durable_object_sqlite"})
+	}))
+	defer remote.Close()
+
+	r := &Running{store: localmetrics.NewMemoryStore(), hostedBaseURL: remote.URL, hostedAccessToken: "access-token", httpClient: remote.Client()}
+	req := httptest.NewRequest(http.MethodGet, "/distlang/metrics/hosted/v1/capabilities", nil)
+	res := httptest.NewRecorder()
+	r.handle(res, req)
+	if res.Code != http.StatusOK {
+		t.Fatalf("status: %d %s", res.Code, res.Body.String())
+	}
+	var payload map[string]any
+	if err := json.Unmarshal(res.Body.Bytes(), &payload); err != nil {
+		t.Fatalf("decode proxy response: %v", err)
+	}
+	if payload["mode"] != "hosted" || payload["storage"] != "durable_object_sqlite" {
+		t.Fatalf("unexpected proxy response: %#v", payload)
 	}
 }
 

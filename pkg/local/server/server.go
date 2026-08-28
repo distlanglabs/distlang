@@ -18,10 +18,14 @@ import (
 )
 
 type Config struct {
-	Host    string
-	Port    int
-	Store   localmetrics.Store
-	Backend localmetrics.QueryBackend
+	Host              string
+	Port              int
+	Store             localmetrics.Store
+	Backend           localmetrics.QueryBackend
+	HostedBaseURL     string
+	HostedAccessToken string
+	HostedToken       func() (string, error)
+	HTTPClient        *http.Client
 }
 
 type Running struct {
@@ -29,6 +33,11 @@ type Running struct {
 	ln      net.Listener
 	store   localmetrics.Store
 	backend localmetrics.QueryBackend
+
+	hostedBaseURL     string
+	hostedAccessToken string
+	hostedToken       func() (string, error)
+	httpClient        *http.Client
 }
 
 func Start(cfg Config) (*Running, error) {
@@ -53,7 +62,7 @@ func Start(cfg Config) (*Running, error) {
 	if err != nil {
 		return nil, err
 	}
-	r := &Running{ln: ln, store: store, backend: backend}
+	r := &Running{ln: ln, store: store, backend: backend, hostedBaseURL: strings.TrimRight(strings.TrimSpace(cfg.HostedBaseURL), "/"), hostedAccessToken: strings.TrimSpace(cfg.HostedAccessToken), hostedToken: cfg.HostedToken, httpClient: cfg.HTTPClient}
 	mux := http.NewServeMux()
 	mux.HandleFunc("/", r.handle)
 	r.server = &http.Server{Handler: mux}
@@ -124,7 +133,7 @@ func (r *Running) handle(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 	if strings.HasPrefix(path, "/metrics/hosted/v1/") {
-		writeJSON(w, http.StatusNotImplemented, map[string]any{"error": "hosted_not_implemented", "message": "Hosted Metrics querying from the local explorer is not wired yet."})
+		r.handleHostedProxy(w, req, path)
 		return
 	}
 	if strings.HasPrefix(path, "/metrics/v1/metricsets/") {
@@ -268,6 +277,15 @@ func (r *Running) handleSQL(w http.ResponseWriter, req *http.Request) {
 }
 
 func (r *Running) handleHostedStatus(w http.ResponseWriter, req *http.Request) {
+	if r.hostedAccessToken != "" {
+		writeJSON(w, http.StatusOK, map[string]any{
+			"ok":           true,
+			"loggedIn":     true,
+			"authBaseURL":  auth.ResolveBaseURL(),
+			"storeBaseURL": r.hostedMetricsBaseURL(),
+		})
+		return
+	}
 	session, err := auth.LoadSession()
 	if err != nil {
 		status := map[string]any{
@@ -294,6 +312,75 @@ func (r *Running) handleHostedStatus(w http.ResponseWriter, req *http.Request) {
 		"authBaseURL":  auth.ResolveBaseURL(),
 		"storeBaseURL": storeapi.ResolveBaseURL(),
 	})
+}
+
+func (r *Running) handleHostedProxy(w http.ResponseWriter, req *http.Request, path string) {
+	token, err := r.hostedBearerToken()
+	if err != nil {
+		writeJSON(w, http.StatusUnauthorized, map[string]any{"error": "hosted_not_logged_in", "message": "Run `distlang helpers login` to query hosted Metrics from this explorer."})
+		return
+	}
+	remoteURL := r.hostedMetricsBaseURL() + "/distlang/metrics/v1" + strings.TrimPrefix(path, "/metrics/hosted/v1")
+	var body io.Reader
+	if req.Body != nil {
+		body = req.Body
+	}
+	proxyReq, err := http.NewRequestWithContext(req.Context(), req.Method, remoteURL, body)
+	if err != nil {
+		writeJSON(w, http.StatusBadGateway, map[string]any{"error": "hosted_proxy_failed", "message": err.Error()})
+		return
+	}
+	proxyReq.Header.Set("Authorization", "Bearer "+token)
+	if contentType := req.Header.Get("Content-Type"); contentType != "" {
+		proxyReq.Header.Set("Content-Type", contentType)
+	}
+	res, err := r.httpClientForProxy().Do(proxyReq)
+	if err != nil {
+		writeJSON(w, http.StatusBadGateway, map[string]any{"error": "hosted_proxy_failed", "message": err.Error()})
+		return
+	}
+	defer res.Body.Close()
+	for key, values := range res.Header {
+		if strings.EqualFold(key, "Content-Length") {
+			continue
+		}
+		for _, value := range values {
+			w.Header().Add(key, value)
+		}
+	}
+	w.WriteHeader(res.StatusCode)
+	_, _ = io.Copy(w, io.LimitReader(res.Body, 4<<20))
+}
+
+func (r *Running) hostedMetricsBaseURL() string {
+	if r.hostedBaseURL != "" {
+		return r.hostedBaseURL
+	}
+	return storeapi.ResolveBaseURL()
+}
+
+func (r *Running) hostedBearerToken() (string, error) {
+	if r.hostedAccessToken != "" {
+		return r.hostedAccessToken, nil
+	}
+	if r.hostedToken != nil {
+		return r.hostedToken()
+	}
+	session, err := auth.NewClient(auth.ResolveBaseURL()).EnsureSession()
+	if err != nil {
+		return "", err
+	}
+	if strings.TrimSpace(session.AccessToken) == "" {
+		return "", auth.ErrNotLoggedIn
+	}
+	return session.AccessToken, nil
+}
+
+func (r *Running) httpClientForProxy() *http.Client {
+	if r.httpClient != nil {
+		return r.httpClient
+	}
+	return &http.Client{Timeout: 30 * time.Second}
 }
 
 func readJSON(req *http.Request, out any) error {
